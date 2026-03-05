@@ -49,16 +49,16 @@ _HIGHLIGHT_JS = (
     "  const el = document.querySelector(selector);"
     "  if (!el) return null;"
     "  el.setAttribute('data-octo-highlight', 'true');"
-    "  el.style.setProperty('outline', '4px solid #D946EF', 'important');"
+    "  el.style.setProperty('outline', '4px solid #22C55E', 'important');"
     "  el.style.setProperty('outline-offset', '4px', 'important');"
-    "  const sh = '0 0 0 8px rgba(217,70,239,0.2), 0 0 20px 4px rgba(217,70,239,0.35)';"
+    "  const sh = '0 0 0 8px rgba(34,197,94,0.2), 0 0 20px 4px rgba(34,197,94,0.35)';"
     "  el.style.setProperty('box-shadow', sh, 'important');"
     "  el.style.setProperty('position', 'relative', 'important');"
     "  const badge = document.createElement('div');"
     "  badge.id = 'octo-badge';"
     "  badge.textContent = stepNum;"
     "  badge.style.cssText = 'position:absolute;top:-14px;left:-14px;z-index:99999;"
-    "width:28px;height:28px;border-radius:50%;background:#D946EF;color:white;"
+    "width:28px;height:28px;border-radius:50%;background:#22C55E;color:white;"
     "font:bold 14px/28px system-ui;text-align:center;"
     "box-shadow:0 2px 8px rgba(0,0,0,0.3);pointer-events:none;';"
     "  const txt = (el.textContent || el.getAttribute('placeholder')"
@@ -132,7 +132,7 @@ def _crop_inset(screenshot_path: Path, bbox: dict, viewport_w: int, viewport_h: 
     border = 3
     frame_w = target_w + border * 2
     frame_h = target_h + border * 2
-    frame = Image.new("RGB", (frame_w, frame_h), (217, 70, 239))
+    frame = Image.new("RGB", (frame_w, frame_h), (34, 197, 94))
     frame.paste(cropped, (border, border))
 
     # ZOOM label dimensions
@@ -170,7 +170,7 @@ def _crop_inset(screenshot_path: Path, bbox: dict, viewport_w: int, viewport_h: 
     draw.rounded_rectangle(
         [pos_x, pos_y, pos_x + label_w, pos_y + label_h],
         radius=4,
-        fill=(217, 70, 239),
+        fill=(34, 197, 94),
     )
     draw.text((pos_x + 8, pos_y + 3), label_text, fill="white", font=font)
 
@@ -215,14 +215,14 @@ async def _execute_interactions(
             ss_path = screenshot_dir / ss_filename
             result = await capture_page(page, ss_path, ss_config)
 
-            # Build enriched description with highlight context for the LLM
+            # Build description for the LLM — ACTION replaces original desc
             desc = value
             if highlight_info and highlight_info.get("text"):
                 el_text = highlight_info["text"]
                 action_verb = {
                     "click": "Click", "fill": "Type into", "select": "Select from"
                 }.get(next_action or "", "Use")
-                desc += f' — ACTION: {action_verb} "{el_text}" (highlighted)'
+                desc = f'STEP TEXT: {action_verb} **{el_text}**'
 
             filenames.append(ss_filename)
             descriptions.append(desc)
@@ -239,7 +239,7 @@ async def _execute_interactions(
                 el_text = highlight_info.get("text", "")[:30]
                 hl_label = f' \\[hl: "{el_text}"]'
             console.print(
-                f"    Screenshot {ss_index}: {result.size_kb} KB{hl_label} — {value}"
+                f"    Screenshot {ss_index}: {result.size_kb} KB{hl_label} — {desc}"
             )
             ss_index += 1
 

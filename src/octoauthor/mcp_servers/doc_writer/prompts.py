@@ -24,17 +24,12 @@ SCREENSHOT RULES (MOST IMPORTANT):
 - The number of steps MUST equal the number of screenshots.
 - Reference format: ![description](assets/filename.png)
 
-HIGHLIGHT ANNOTATIONS (MANDATORY — HIGHEST PRIORITY):
-- Some descriptions end with "ACTION: Click/Type into/Select from [element]".
-- When an ACTION is present, the step text MUST tell the user to perform that ACTION.
-- The ACTION is the ONLY instruction for that step — ignore the description text before "—".
-- The description before "—" is just context about what the screenshot shows, NOT the step instruction.
-- Example: "The Tasks page showing all tasks — ACTION: Click \"Dashboard\" (highlighted)"
-  Step text: Click **Dashboard** in the sidebar to return to the Dashboard.
-  WRONG: "View the Tasks page showing all tasks" (this ignores the ACTION)
-- Another example: "Form filled in — ACTION: Click \"Create Project\" (highlighted)"
-  Step text: Click **Create Project** to save the new project.
-- If no ACTION annotation, describe what the user sees in the screenshot.
+STEP TEXT OVERRIDES:
+- Some descriptions start with "STEP TEXT:" — use that EXACT text as the step instruction.
+- Copy the step text verbatim. Do NOT rephrase, reorder, or substitute different words.
+- Example: 'STEP TEXT: Click **Create Project**'
+  You write: Click **Create Project** to save the new project.
+- If no "STEP TEXT:" prefix, describe what the user sees in the screenshot.
 
 WRITING RULES:
 - Imperative voice: "Click Save" not "You should click Save"
