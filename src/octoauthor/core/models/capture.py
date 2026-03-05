@@ -12,7 +12,7 @@ class RouteCapture(BaseModel):
     wait_for: str | None = Field(default=None, description="CSS selector to wait for before capture")
     interactions: list[dict[str, str]] = Field(
         default_factory=list,
-        description="Ordered interactions to perform (e.g., [{'click': '#add-btn'}, {'fill': '#name', 'value': 'Demo'}])",
+        description="Ordered interactions to perform (e.g., [{'click': '#add-btn'}, {'fill': '#name'}])",
     )
     capture_states: list[str] = Field(
         default_factory=list,

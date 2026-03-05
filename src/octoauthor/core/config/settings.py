@@ -45,7 +45,9 @@ class OctoAuthorSettings(BaseSettings):
     qa_provider: ProviderType | None = Field(default=None, description="QA review provider (optional)")
     qa_model: str | None = Field(default=None, description="QA review model")
 
-    audit_provider: ProviderType = Field(default=ProviderType.ANTHROPIC, description="Audit provider (should be strong)")
+    audit_provider: ProviderType = Field(
+        default=ProviderType.ANTHROPIC, description="Audit provider (should be strong)"
+    )
     audit_model: str = Field(default="claude-sonnet-4-6", description="Audit model")
 
     # GitHub integration
