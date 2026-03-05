@@ -49,6 +49,6 @@ constraints:
   - MUST flag any screenshot containing PII or credentials
   - MUST flag screenshots that don't match expected viewport (1280x800)
   - MUST flag screenshots showing dev tools or browser chrome
-  - Visual diff threshold: >15% pixel change = flag for human review
+  - "Visual diff threshold: >15% pixel change = flag for human review"
   - Annotations must use consistent style (defined in doc-standard)
   - NEVER modify screenshot content — only add annotation metadata

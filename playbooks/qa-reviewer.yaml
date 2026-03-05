@@ -53,7 +53,6 @@ steps:
 constraints:
   - MUST check every rule in doc-standard.yaml — no skipping
   - Findings MUST include specific line/section references
-  - Verdict levels: "passed" (all rules pass), "needs-revision" (fixable issues),
-    "blocked" (security or fundamental quality issues)
+  - 'Verdict levels: "passed" (all rules pass), "needs-revision" (fixable issues), "blocked" (security issues)'
   - MUST NOT modify docs — review only
   - MUST flag inconsistencies between docs (same UI element called different names)
