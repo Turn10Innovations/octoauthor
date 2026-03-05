@@ -101,19 +101,86 @@ src/octoauthor/mcp_servers/{server_name}/
 └── config.py          # Server-specific configuration
 ```
 
-### 5. Agent Pattern (OpenClaw Skills)
+### 5. OctoAuthor is the Garage, Not the Mechanic
 
-Agents are packaged as OpenClaw skills (markdown-defined). Each agent has a clear role, required capabilities, and output contract.
+OctoAuthor is a **service** that exposes tools, specs, and playbooks. The orchestrator (OpenClaw, or any agentic framework) is a **separate system** that connects remotely, discovers capabilities, and does the work.
+
+**OctoAuthor NEVER embeds or runs the orchestrator.** It provides:
+- MCP servers over **HTTP+SSE** (remotely connectable, not stdio)
+- A **discovery endpoint** (`GET /api/v1/discover`) listing available tools, specs, and playbooks
+- **Agent playbooks** (portable YAML role definitions, not tied to any orchestrator)
+- **Spec files** the orchestrator reads to understand quality standards
+
+```
+┌─────────────────────────────────────────────┐
+│  OpenClaw / Any Orchestrator (THE MECHANIC) │
+│  - Runs on its own server/machine           │
+│  - Connects to OctoAuthor remotely          │
+│  - Reads playbooks to understand its role   │
+│  - Uses MCP tools to do the work            │
+└──────────────┬──────────────────────────────┘
+               │ HTTP+SSE (MCP protocol)
+               ▼
+┌─────────────────────────────────────────────┐
+│  OctoAuthor Service (THE GARAGE)            │
+│  - Exposes MCP servers as HTTP endpoints    │
+│  - Serves playbooks and specs               │
+│  - Provides discovery API                   │
+│  - Does NOT know or care who the mechanic is│
+└─────────────────────────────────────────────┘
+```
+
+#### Agent Playbooks (orchestrator-agnostic)
 
 ```yaml
-# skills/{agent_name}.md - OpenClaw skill definition
-name: octoauthor-writer
+# playbooks/writer.yaml - any orchestrator can consume this
+name: writer
 description: Generates step-by-step user documentation from structured capture data
+role: |
+  You are a technical writer specializing in user-facing documentation.
+  You write clear, imperative step-by-step guides with screenshots.
+  You follow the documentation standard strictly.
 requires:
   capabilities: [text]
   mcp_servers: [doc-store, doc-writer]
-input: CaptureData (structured screenshots + DOM analysis)
-output: DocBundle (markdown files + metadata)
+  specs: [doc-standard.yaml]
+input:
+  type: CaptureResult
+  description: Structured screenshots + DOM analysis from the navigator
+output:
+  type: DocBundle
+  description: Complete markdown guide with metadata and screenshot references
+constraints:
+  - Must pass all rules in doc-standard.yaml
+  - Max 10 steps per guide
+  - Imperative voice only
+```
+
+#### Discovery Endpoint
+
+```json
+GET /api/v1/discover
+{
+  "service": "octoauthor",
+  "version": "0.1.0",
+  "mcp_servers": [
+    {"name": "screenshot-server", "url": "http://host:8100/mcp", "transport": "sse"},
+    {"name": "doc-writer-server", "url": "http://host:8101/mcp", "transport": "sse"},
+    {"name": "doc-store-server", "url": "http://host:8102/mcp", "transport": "sse"},
+    {"name": "visual-qa-server", "url": "http://host:8103/mcp", "transport": "sse"},
+    {"name": "app-inspector-server", "url": "http://host:8104/mcp", "transport": "sse"}
+  ],
+  "playbooks": [
+    {"name": "navigator", "url": "http://host:8000/api/v1/playbooks/navigator"},
+    {"name": "writer", "url": "http://host:8000/api/v1/playbooks/writer"},
+    {"name": "graphic-designer", "url": "http://host:8000/api/v1/playbooks/graphic-designer"},
+    {"name": "qa-reviewer", "url": "http://host:8000/api/v1/playbooks/qa-reviewer"}
+  ],
+  "specs": {
+    "doc_standard": "http://host:8000/api/v1/specs/doc-standard",
+    "tag_schema": "http://host:8000/api/v1/specs/tag-schema"
+  }
+}
 ```
 
 ### 6. No Hardcoding
@@ -166,34 +233,39 @@ OctoAuthor generates docs that MUST pass its own standards. The specs in `specs/
 
 ## Project Architecture
 
-```
-OctoAuthor Architecture:
+OctoAuthor follows the **Garage/Mechanic** pattern: OctoAuthor is the garage (service + tools), the orchestrator is the mechanic (connects remotely, does the work).
 
-OpenClaw (orchestrator - UNTRUSTED worker)
-├── MCP Servers (tools)
-│   ├── screenshot-server    → Playwright navigation + capture
-│   ├── doc-writer-server    → MD generation from structured data
-│   ├── visual-qa-server     → Screenshot validation + visual diff
-│   ├── doc-store-server     → Read/write/query doc repository
-│   └── app-inspector-server → DOM analysis, route discovery
-│
-├── Agents (OpenClaw skills)
-│   ├── Navigator            → Walks app, captures flows
-│   ├── Writer               → Generates prose from captures
-│   ├── Graphic Designer     → Validates/annotates screenshots
-│   ├── QA Reviewer          → Checks docs against style guide
-│   └── Orchestrator         → Coordinates the pipeline
-│
-├── Auditor (SEPARATE trusted process)
-│   ├── Content safety scan
-│   ├── Prompt injection detection
-│   ├── PII/data leakage OCR
-│   └── Posts review on PR
-│
-└── Security Gates
-    ├── Gate 1: GitHub Actions (static analysis, linting, secret scanning)
-    ├── Gate 2: Auditor Agent (AI security review)
-    └── Gate 3: Human Review (HITL merge approval)
+```
+THE MECHANIC (external, untrusted)          THE GARAGE (OctoAuthor service)
+┌──────────────────────────┐               ┌──────────────────────────────────┐
+│  OpenClaw / Any Agent    │               │  OctoAuthor Service              │
+│  Framework               │   HTTP+SSE    │                                  │
+│                          │◄─────────────►│  Discovery API (/api/v1/discover)│
+│  Reads playbooks         │   (MCP)       │                                  │
+│  Uses MCP tools          │               │  MCP Servers (the tools):        │
+│  Follows specs           │               │  ├── screenshot-server  :8100    │
+│  Creates PRs             │               │  ├── doc-writer-server  :8101    │
+│                          │               │  ├── doc-store-server   :8102    │
+│  NOT part of this repo.  │               │  ├── visual-qa-server   :8103    │
+│  Runs on its own server. │               │  └── app-inspector      :8104    │
+└──────────────────────────┘               │                                  │
+                                           │  Playbooks (agent role defs):    │
+THE AUDITOR (separate, trusted)            │  ├── navigator.yaml              │
+┌──────────────────────────┐               │  ├── writer.yaml                 │
+│  Auditor Agent           │   HTTP+SSE    │  ├── graphic-designer.yaml       │
+│  (own credentials,       │◄─────────────►│  └── qa-reviewer.yaml            │
+│   own server)            │   (MCP)       │                                  │
+│                          │               │  Specs (quality standards):       │
+│  Reviews PRs             │               │  ├── doc-standard.yaml           │
+│  Posts findings          │               │  └── tag-schema.yaml             │
+│  Labels pass/flag/block  │               └──────────────────────────────────┘
+└──────────────────────────┘
+                                           THE GATES (GitHub, independent)
+                                           ┌──────────────────────────────────┐
+                                           │  Gate 1: GitHub Actions (static) │
+                                           │  Gate 2: Auditor Agent (AI)      │
+                                           │  Gate 3: Human Review (HITL)     │
+                                           └──────────────────────────────────┘
 ```
 
 ## Tech Stack
@@ -246,12 +318,14 @@ uv run octoauthor run --config config.yaml --target ./my-app
 | What | Where |
 |------|-------|
 | MCP Servers | `src/octoauthor/mcp_servers/` |
-| Agent Skills | `skills/` |
+| Service Layer (discovery, API) | `src/octoauthor/service/` |
+| Playbooks (agent role defs) | `playbooks/` |
 | Core Config | `src/octoauthor/core/config/` |
 | Provider Abstraction | `src/octoauthor/core/providers/` |
-| Security / Auditor | `src/octoauthor/agents/auditor/` |
+| Auditor | `src/octoauthor/auditor/` |
 | Pydantic Models | `src/octoauthor/core/models/` |
 | Doc Standard Spec | `specs/doc-standard.yaml` |
+| Tag Schema | `specs/tag-schema.yaml` |
 | Threat Model | `docs/architecture/threat-model.md` |
 | GitHub Actions | `.github/workflows/` |
 | Integration SDKs | `sdks/` |

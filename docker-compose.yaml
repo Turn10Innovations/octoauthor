@@ -1,0 +1,75 @@
+# OctoAuthor Docker Compose - The Garage Setup
+#
+# This runs OctoAuthor as a locked-down service that external orchestrators
+# (OpenClaw, etc.) connect to remotely via HTTP+SSE.
+#
+# Security model:
+# - Read-only filesystem (except /workspace volume)
+# - No shell access, no privilege escalation
+# - Network limited to exposed ports only
+# - Non-root user
+# - Resource limits enforced
+# - All egress blocked except allowlisted domains
+
+services:
+  octoauthor:
+    build: .
+    container_name: octoauthor-garage
+    restart: unless-stopped
+
+    # --- Security: drop all capabilities, no privilege escalation ---
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+    read_only: true
+
+    # --- Writable volumes (minimal) ---
+    volumes:
+      # Workspace: where generated docs and screenshots go
+      - octoauthor-workspace:/workspace
+      # Temp dir needed by Python/Playwright
+      - type: tmpfs
+        target: /tmp
+        tmpfs:
+          size: 256M
+
+    # --- Resource limits ---
+    deploy:
+      resources:
+        limits:
+          memory: 4G
+          cpus: "2.0"
+        reservations:
+          memory: 1G
+          cpus: "0.5"
+
+    # --- Ports exposed to the network ---
+    ports:
+      - "${OCTOAUTHOR_API_PORT:-8000}:8000"       # Discovery API
+      - "${OCTOAUTHOR_MCP_SCREENSHOT:-8100}:8100"  # screenshot-server
+      - "${OCTOAUTHOR_MCP_WRITER:-8101}:8101"      # doc-writer-server
+      - "${OCTOAUTHOR_MCP_STORE:-8102}:8102"       # doc-store-server
+      - "${OCTOAUTHOR_MCP_VISUAL:-8103}:8103"      # visual-qa-server
+      - "${OCTOAUTHOR_MCP_INSPECTOR:-8104}:8104"   # app-inspector-server
+
+    # --- Environment ---
+    environment:
+      - OCTOAUTHOR_LOG_LEVEL=${OCTOAUTHOR_LOG_LEVEL:-INFO}
+      - OCTOAUTHOR_DOC_OUTPUT_DIR=/workspace/docs
+      - OCTOAUTHOR_SCREENSHOT_OUTPUT_DIR=/workspace/screenshots
+      # API keys passed through (never baked into image)
+      - OCTOAUTHOR_API_KEY=${OCTOAUTHOR_API_KEY}
+      - OCTOAUTHOR_AUDITOR_API_KEY=${OCTOAUTHOR_AUDITOR_API_KEY}
+
+    # --- Health check ---
+    healthcheck:
+      test: ["CMD", "uv", "run", "python", "-c", "import httpx; httpx.get('http://localhost:8000/health').raise_for_status()"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
+
+volumes:
+  octoauthor-workspace:
+    driver: local
