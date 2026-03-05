@@ -1,0 +1,25 @@
+{{ overview }}
+
+## Prerequisites
+
+{{ prerequisites if prerequisites else "None" }}
+
+## Steps
+
+{% for step in steps %}
+{{ step.number }}. {{ step.instruction }}
+{% if step.description %}
+   {{ step.description }}
+{% endif %}
+{% if step.screenshot %}
+   ![{{ step.screenshot.alt_text }}](assets/{{ step.screenshot.filename }})
+{% endif %}
+{% endfor %}
+{% if tips %}
+
+## Tips
+
+{% for tip in tips %}
+- {{ tip }}
+{% endfor %}
+{% endif %}
