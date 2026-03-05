@@ -60,6 +60,14 @@ class OctoAuthorSettings(BaseSettings):
         description="Prefix for auto-created branches",
     )
 
+    # Ports — configurable to avoid conflicts with other services
+    api_port: int = Field(default=9210, description="Discovery API port")
+    mcp_port_screenshot: int = Field(default=9211, description="Screenshot MCP server port")
+    mcp_port_doc_writer: int = Field(default=9212, description="Doc writer MCP server port")
+    mcp_port_doc_store: int = Field(default=9213, description="Doc store MCP server port")
+    mcp_port_visual_qa: int = Field(default=9214, description="Visual QA MCP server port")
+    mcp_port_app_inspector: int = Field(default=9215, description="App inspector MCP server port")
+
     # Security
     url_allowlist: list[str] = Field(
         default_factory=list,

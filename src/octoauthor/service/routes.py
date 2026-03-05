@@ -14,7 +14,7 @@ if TYPE_CHECKING:
 from octoauthor import __version__
 from octoauthor.core.logging import get_logger
 from octoauthor.core.models.service import DiscoveryResponse, MCPServerInfo, PlaybookInfo
-from octoauthor.mcp_servers.registry import SERVER_PORTS
+from octoauthor.mcp_servers.registry import get_server_ports
 
 logger = get_logger(__name__)
 
@@ -34,7 +34,7 @@ async def discover(request: Request) -> JSONResponse:
     host = _get_host(request)
 
     mcp_servers = []
-    for name, port in SERVER_PORTS.items():
+    for name, port in get_server_ports().items():
         mcp_servers.append(
             MCPServerInfo(
                 name=name,

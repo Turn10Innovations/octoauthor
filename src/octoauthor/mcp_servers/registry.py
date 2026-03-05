@@ -11,14 +11,34 @@ if TYPE_CHECKING:
 
 logger = get_logger(__name__)
 
-# Default port assignments for each MCP server
-SERVER_PORTS: dict[str, int] = {
-    "doc-store-server": 8102,
-    "screenshot-server": 8100,
-    "doc-writer-server": 8101,
-    "visual-qa-server": 8103,
-    "app-inspector-server": 8104,
+# Canonical server names
+SERVER_NAMES: list[str] = [
+    "screenshot-server",
+    "doc-writer-server",
+    "doc-store-server",
+    "visual-qa-server",
+    "app-inspector-server",
+]
+
+# Maps server name -> settings field name for its port
+_PORT_SETTINGS_MAP: dict[str, str] = {
+    "screenshot-server": "mcp_port_screenshot",
+    "doc-writer-server": "mcp_port_doc_writer",
+    "doc-store-server": "mcp_port_doc_store",
+    "visual-qa-server": "mcp_port_visual_qa",
+    "app-inspector-server": "mcp_port_app_inspector",
 }
+
+
+def get_server_ports() -> dict[str, int]:
+    """Get port assignments for all servers from settings."""
+    from octoauthor.core.config import get_settings
+
+    settings = get_settings()
+    return {
+        name: getattr(settings, field)
+        for name, field in _PORT_SETTINGS_MAP.items()
+    }
 
 
 def create_server(name: str) -> FastMCP:
@@ -58,15 +78,21 @@ def create_server(name: str) -> FastMCP:
 
         return create_visual_qa_server()
 
-    msg = f"Unknown MCP server: {name}. Available: {', '.join(SERVER_PORTS.keys())}"
+    msg = f"Unknown MCP server: {name}. Available: {', '.join(SERVER_NAMES)}"
     raise ValueError(msg)
 
 
 def get_default_port(name: str) -> int:
-    """Get the default port for a server name."""
-    return SERVER_PORTS.get(name, 8000)
+    """Get the configured port for a server name."""
+    ports = get_server_ports()
+    if name in ports:
+        return ports[name]
+    # Fallback for api
+    from octoauthor.core.config import get_settings
+
+    return get_settings().api_port
 
 
 def list_servers() -> list[str]:
     """List all registered server names."""
-    return list(SERVER_PORTS.keys())
+    return list(SERVER_NAMES)

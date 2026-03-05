@@ -29,19 +29,25 @@ def serve(
     from octoauthor.mcp_servers.registry import create_server, get_default_port, list_servers
 
     if server == "list":
+        from octoauthor.core.config import get_settings
+
+        settings = get_settings()
         console.print("[bold]Available MCP servers:[/bold]")
         for name in list_servers():
-            default = get_default_port(name)
-            console.print(f"  {name}  (default port: {default})")
-        console.print("  api  (default port: 8000)")
+            configured_port = get_default_port(name)
+            console.print(f"  {name}  (port: {configured_port})")
+        console.print(f"  api  (port: {settings.api_port})")
+        console.print("\n[dim]Ports are configured via .env (OCTOAUTHOR_ prefix)[/dim]")
         return
 
     if server == "api":
         import uvicorn
 
+        from octoauthor.core.config import get_settings
         from octoauthor.service import create_app
 
-        effective_port = port if port > 0 else 8000
+        settings = get_settings()
+        effective_port = port if port > 0 else settings.api_port
         console.print(f"Starting [bold]discovery API[/bold] on {host}:{effective_port}...")
         uvicorn.run(create_app(), host=host, port=effective_port, log_level="info")
         return

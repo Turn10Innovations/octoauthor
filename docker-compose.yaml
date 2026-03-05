@@ -3,6 +3,10 @@
 # This runs OctoAuthor as a locked-down service that external orchestrators
 # (OpenClaw, etc.) connect to remotely via HTTP+SSE.
 #
+# Port configuration:
+# All ports are configurable via .env file (OCTOAUTHOR_ prefix).
+# Copy .env.example to .env and adjust as needed.
+#
 # Security model:
 # - Read-only filesystem (except /workspace volume)
 # - No shell access, no privilege escalation
@@ -16,6 +20,7 @@ services:
     build: .
     container_name: octoauthor-platform
     restart: unless-stopped
+    env_file: .env
 
     # --- Security: drop all capabilities, no privilege escalation ---
     cap_drop:
@@ -45,26 +50,26 @@ services:
           cpus: "0.5"
 
     # --- Ports exposed to the network ---
+    # All ports are read from .env via the OCTOAUTHOR_ prefix.
+    # The container listens on the same port internally and externally.
     ports:
-      - "${OCTOAUTHOR_API_PORT:-8000}:8000"       # Discovery API
-      - "${OCTOAUTHOR_MCP_SCREENSHOT:-8100}:8100"  # screenshot-server
-      - "${OCTOAUTHOR_MCP_WRITER:-8101}:8101"      # doc-writer-server
-      - "${OCTOAUTHOR_MCP_STORE:-8102}:8102"       # doc-store-server
-      - "${OCTOAUTHOR_MCP_VISUAL:-8103}:8103"      # visual-qa-server
-      - "${OCTOAUTHOR_MCP_INSPECTOR:-8104}:8104"   # app-inspector-server
+      - "${OCTOAUTHOR_API_PORT:-9210}:${OCTOAUTHOR_API_PORT:-9210}"
+      - "${OCTOAUTHOR_MCP_PORT_SCREENSHOT:-9211}:${OCTOAUTHOR_MCP_PORT_SCREENSHOT:-9211}"
+      - "${OCTOAUTHOR_MCP_PORT_DOC_WRITER:-9212}:${OCTOAUTHOR_MCP_PORT_DOC_WRITER:-9212}"
+      - "${OCTOAUTHOR_MCP_PORT_DOC_STORE:-9213}:${OCTOAUTHOR_MCP_PORT_DOC_STORE:-9213}"
+      - "${OCTOAUTHOR_MCP_PORT_VISUAL_QA:-9214}:${OCTOAUTHOR_MCP_PORT_VISUAL_QA:-9214}"
+      - "${OCTOAUTHOR_MCP_PORT_APP_INSPECTOR:-9215}:${OCTOAUTHOR_MCP_PORT_APP_INSPECTOR:-9215}"
 
     # --- Environment ---
+    # Most settings come from .env via env_file above.
+    # Only override container-specific paths here.
     environment:
-      - OCTOAUTHOR_LOG_LEVEL=${OCTOAUTHOR_LOG_LEVEL:-INFO}
       - OCTOAUTHOR_DOC_OUTPUT_DIR=/workspace/docs
       - OCTOAUTHOR_SCREENSHOT_OUTPUT_DIR=/workspace/screenshots
-      # API keys passed through (never baked into image)
-      - OCTOAUTHOR_API_KEY=${OCTOAUTHOR_API_KEY}
-      - OCTOAUTHOR_AUDITOR_API_KEY=${OCTOAUTHOR_AUDITOR_API_KEY}
 
     # --- Health check ---
     healthcheck:
-      test: ["CMD", "uv", "run", "python", "-c", "import httpx; httpx.get('http://localhost:8000/health').raise_for_status()"]
+      test: ["CMD", "uv", "run", "python", "-c", "import httpx; httpx.get('http://localhost:${OCTOAUTHOR_API_PORT:-9210}/health').raise_for_status()"]
       interval: 30s
       timeout: 5s
       retries: 3
