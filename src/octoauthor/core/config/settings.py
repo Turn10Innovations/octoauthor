@@ -53,6 +53,7 @@ class OctoAuthorSettings(BaseSettings):
     # API Keys
     api_key: str | None = Field(default=None, description="API key for orchestrator authentication")
     auditor_api_key: str | None = Field(default=None, description="API key for the auditor agent")
+    anthropic_api_key: str | None = Field(default=None, description="Anthropic API key for LLM providers")
 
     # GitHub integration
     github_token: str | None = Field(default=None, description="GitHub PAT for PR operations")

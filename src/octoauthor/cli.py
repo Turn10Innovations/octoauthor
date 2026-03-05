@@ -157,6 +157,41 @@ def audit(
 
 
 @app.command()
+def auth(
+    target: str = typer.Option(..., help="Base URL of the target app to log into"),
+    output: str = typer.Option(".octoauthor/auth/storage-state.json", help="Where to save the session state"),
+) -> None:
+    """Open a browser for manual login, then save the session state for automated runs."""
+    import asyncio
+
+    async def _capture_session() -> None:
+        from playwright.async_api import async_playwright
+
+        pw = await async_playwright().start()
+        browser = await pw.chromium.launch(headless=False)
+        context = await browser.new_context()
+        page = await context.new_page()
+        await page.goto(target)
+
+        console.print(f"\nBrowser opened to [bold]{target}[/bold]")
+        console.print("Log in manually, then press [bold green]Enter[/bold green] here when done...")
+        input()
+
+        from pathlib import Path as PathObj
+
+        out_path = PathObj(output)
+        out_path.parent.mkdir(parents=True, exist_ok=True)
+        await context.storage_state(path=str(out_path))
+        await browser.close()
+        await pw.stop()
+        console.print(f"Session saved to [green]{output}[/green]")
+        console.print("\nAdd this to your config:")
+        console.print(f"  auth:\n    strategy: storage_state\n    storage_state_path: {output}")
+
+    asyncio.run(_capture_session())
+
+
+@app.command()
 def validate(
     path: str = typer.Argument(help="Path to docs directory or file to validate"),
 ) -> None:

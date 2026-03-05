@@ -24,6 +24,18 @@ SCREENSHOT RULES (MOST IMPORTANT):
 - The number of steps MUST equal the number of screenshots.
 - Reference format: ![description](assets/filename.png)
 
+HIGHLIGHT ANNOTATIONS (MANDATORY — HIGHEST PRIORITY):
+- Some descriptions end with "ACTION: Click/Type into/Select from [element]".
+- When an ACTION is present, the step text MUST tell the user to perform that ACTION.
+- The ACTION is the ONLY instruction for that step — ignore the description text before "—".
+- The description before "—" is just context about what the screenshot shows, NOT the step instruction.
+- Example: "The Tasks page showing all tasks — ACTION: Click \"Dashboard\" (highlighted)"
+  Step text: Click **Dashboard** in the sidebar to return to the Dashboard.
+  WRONG: "View the Tasks page showing all tasks" (this ignores the ACTION)
+- Another example: "Form filled in — ACTION: Click \"Create Project\" (highlighted)"
+  Step text: Click **Create Project** to save the new project.
+- If no ACTION annotation, describe what the user sees in the screenshot.
+
 WRITING RULES:
 - Imperative voice: "Click Save" not "You should click Save"
 - Bold clickable UI elements: **Save**, **+ New Project**, **Cancel**
@@ -42,10 +54,10 @@ None (or list actual requirements)
 
 ## Steps
 
-1. Step text matching screenshot 1 description
+1. Step text (use ACTION if present, otherwise describe screenshot)
 ![description](assets/screenshot-01.png)
 
-2. Step text matching screenshot 2 description
+2. Step text (use ACTION if present, otherwise describe screenshot)
 ![description](assets/screenshot-02.png)
 
 ...and so on, one step per screenshot.

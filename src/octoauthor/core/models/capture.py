@@ -1,6 +1,38 @@
 """Capture models - structures for app navigation and screenshot capture."""
 
+from __future__ import annotations
+
+from enum import StrEnum
+
 from pydantic import BaseModel, Field, HttpUrl
+
+
+class AuthStrategy(StrEnum):
+    """Supported authentication strategies."""
+
+    none = "none"
+    storage_state = "storage_state"
+    credentials = "credentials"
+
+
+class AuthConfig(BaseModel):
+    """Authentication configuration for accessing the target application."""
+
+    strategy: AuthStrategy = Field(default=AuthStrategy.none, description="Auth strategy to use")
+    storage_state_path: str | None = Field(
+        default=None,
+        description="Path to Playwright storage state JSON (cookies + localStorage)",
+    )
+    login_url: str | None = Field(default=None, description="Login page URL for credential-based auth")
+    username_selector: str | None = Field(default=None, description="CSS selector for username field")
+    password_selector: str | None = Field(default=None, description="CSS selector for password field")
+    submit_selector: str | None = Field(default=None, description="CSS selector for login submit button")
+    username: str | None = Field(default=None, description="Username (or use OCTOAUTHOR_AUTH_USERNAME env var)")
+    password: str | None = Field(default=None, description="Password (or use OCTOAUTHOR_AUTH_PASSWORD env var)")
+    wait_after_login: str | None = Field(
+        default=None,
+        description="CSS selector to wait for after login to confirm success",
+    )
 
 
 class RouteCapture(BaseModel):
@@ -26,7 +58,7 @@ class CaptureConfig(BaseModel):
 
     app_name: str = Field(description="Name of the target application")
     base_url: HttpUrl = Field(description="Base URL of the running application")
-    auth: dict[str, str] | None = Field(default=None, description="Auth credentials (resolved from env vars)")
+    auth: AuthConfig = Field(default_factory=AuthConfig, description="Authentication config")
     viewport_width: int = Field(default=1280, description="Browser viewport width")
     viewport_height: int = Field(default=800, description="Browser viewport height")
     routes: list[RouteCapture] = Field(description="Routes to capture")

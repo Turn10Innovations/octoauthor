@@ -54,7 +54,7 @@ class TestModels:
 class TestPrompts:
     def test_system_prompt_has_rules(self) -> None:
         formatted = SYSTEM_PROMPT.format(max_steps=10)
-        assert "imperative voice" in formatted
+        assert "imperative voice" in formatted.lower()
         assert "10" in formatted
 
     def test_generate_prompt_basic(self) -> None:

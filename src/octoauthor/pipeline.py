@@ -20,6 +20,163 @@ logger = get_logger(__name__)
 console = Console()
 
 
+def _get_next_action(
+    interactions: list[dict[str, str]], current_idx: int
+) -> tuple[str | None, str | None]:
+    """Look ahead to find the next interactive element and its action type.
+
+    Returns:
+        Tuple of (css_selector, action_type) or (None, None).
+    """
+    for i in range(current_idx + 1, len(interactions)):
+        step = interactions[i]
+        action = next(iter(step))
+        value = step[action]
+        if action == "click":
+            return value, "click"
+        if action == "fill":
+            return value.split("|", 1)[0], "fill"
+        if action == "select":
+            return value.split("|", 1)[0], "select"
+        if action == "screenshot":
+            return None, None
+    return None, None
+
+
+# Highlight with magenta + numbered step badge — pops on any UI
+_HIGHLIGHT_JS = (
+    "([selector, stepNum]) => {"
+    "  const el = document.querySelector(selector);"
+    "  if (!el) return null;"
+    "  el.setAttribute('data-octo-highlight', 'true');"
+    "  el.style.setProperty('outline', '4px solid #D946EF', 'important');"
+    "  el.style.setProperty('outline-offset', '4px', 'important');"
+    "  const sh = '0 0 0 8px rgba(217,70,239,0.2), 0 0 20px 4px rgba(217,70,239,0.35)';"
+    "  el.style.setProperty('box-shadow', sh, 'important');"
+    "  el.style.setProperty('position', 'relative', 'important');"
+    "  const badge = document.createElement('div');"
+    "  badge.id = 'octo-badge';"
+    "  badge.textContent = stepNum;"
+    "  badge.style.cssText = 'position:absolute;top:-14px;left:-14px;z-index:99999;"
+    "width:28px;height:28px;border-radius:50%;background:#D946EF;color:white;"
+    "font:bold 14px/28px system-ui;text-align:center;"
+    "box-shadow:0 2px 8px rgba(0,0,0,0.3);pointer-events:none;';"
+    "  const txt = (el.textContent || el.getAttribute('placeholder')"
+    "    || el.getAttribute('title') || '').trim().substring(0, 60);"
+    "  el.style.setProperty('overflow', 'visible', 'important');"
+    "  el.appendChild(badge);"
+    "  const rect = el.getBoundingClientRect();"
+    "  return {x:Math.round(rect.x), y:Math.round(rect.y),"
+    "    w:Math.round(rect.width), h:Math.round(rect.height), text:txt};"
+    "}"
+)
+
+_REMOVE_HIGHLIGHT_JS = (
+    "() => {"
+    "  const el = document.querySelector('[data-octo-highlight]');"
+    "  if (!el) return;"
+    "  el.removeAttribute('data-octo-highlight');"
+    "  el.style.removeProperty('outline');"
+    "  el.style.removeProperty('outline-offset');"
+    "  el.style.removeProperty('box-shadow');"
+    "  el.style.removeProperty('position');"
+    "  el.style.removeProperty('overflow');"
+    "  const badge = document.getElementById('octo-badge');"
+    "  if (badge) badge.remove();"
+    "}"
+)
+
+
+def _crop_inset(screenshot_path: Path, bbox: dict, viewport_w: int, viewport_h: int) -> None:
+    """Add a zoomed PIP inset of the highlighted element area to the screenshot."""
+    from PIL import Image, ImageDraw, ImageFont
+
+    img = Image.open(screenshot_path)
+    img_w, img_h = img.size
+
+    # Scale bbox from CSS pixels to actual image pixels
+    scale_x = img_w / viewport_w
+    scale_y = img_h / viewport_h
+
+    # Element bounds in image pixels
+    el_x = int(bbox["x"] * scale_x)
+    el_y = int(bbox["y"] * scale_y)
+    el_w = int(bbox["w"] * scale_x)
+    el_h = int(bbox["h"] * scale_y)
+    cx = el_x + el_w // 2
+    cy = el_y + el_h // 2
+
+    # Crop region: element + tight padding (1.5x element size, min 80px padding)
+    pad_x = max(80, int(el_w * 0.75))
+    pad_y = max(60, int(el_h * 0.75))
+    x1 = max(0, cx - el_w // 2 - pad_x)
+    y1 = max(0, cy - el_h // 2 - pad_y)
+    x2 = min(img_w, cx + el_w // 2 + pad_x)
+    y2 = min(img_h, cy + el_h // 2 + pad_y)
+
+    cropped = img.crop((x1, y1, x2, y2))
+
+    # Scale inset to 28% of image width, maintain aspect ratio
+    target_w = int(img_w * 0.28)
+    ratio = target_w / cropped.width
+    target_h = int(cropped.height * ratio)
+    # Cap height so PIP doesn't dominate the image
+    max_h = int(img_h * 0.28)
+    if target_h > max_h:
+        target_h = max_h
+        ratio = target_h / cropped.height
+        target_w = int(cropped.width * ratio)
+    cropped = cropped.resize((target_w, target_h), Image.Resampling.LANCZOS)
+
+    # Build framed PIP: 3px magenta border
+    border = 3
+    frame_w = target_w + border * 2
+    frame_h = target_h + border * 2
+    frame = Image.new("RGB", (frame_w, frame_h), (217, 70, 239))
+    frame.paste(cropped, (border, border))
+
+    # ZOOM label dimensions
+    label_h = 22
+    label_text = "ZOOM"
+    try:
+        font = ImageFont.truetype("/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf", 14)
+    except OSError:
+        font = ImageFont.load_default()
+    label_w = 62  # fits "ZOOM" in DejaVuSans-Bold 14
+
+    # Total PIP height including label
+    total_h = label_h + frame_h
+
+    # Shadow offset
+    shadow_off = 5
+
+    # Position: bottom-right with margin, ensuring nothing gets clipped
+    margin = 16
+    pos_x = img_w - frame_w - margin - shadow_off
+    pos_y = img_h - total_h - margin - shadow_off
+    # Safety clamp
+    pos_x = max(margin, pos_x)
+    pos_y = max(margin, pos_y)
+
+    # Draw shadow behind the frame (not behind label)
+    shadow = Image.new("RGBA", (frame_w, frame_h), (0, 0, 0, 80))
+    img.paste(shadow, (pos_x + shadow_off, pos_y + label_h + shadow_off), shadow)
+
+    # Draw the frame
+    img.paste(frame, (pos_x, pos_y + label_h))
+
+    # Draw ZOOM label pill
+    draw = ImageDraw.Draw(img)
+    draw.rounded_rectangle(
+        [pos_x, pos_y, pos_x + label_w, pos_y + label_h],
+        radius=4,
+        fill=(217, 70, 239),
+    )
+    draw.text((pos_x + 8, pos_y + 3), label_text, fill="white", font=font)
+
+    img.save(screenshot_path, format="PNG", optimize=True)
+
+
 async def _execute_interactions(
     page: Page,
     route_def: RouteCapture,
@@ -37,19 +194,58 @@ async def _execute_interactions(
     filenames: list[str] = []
     descriptions: list[str] = []
     ss_index = 1
+    interactions = route_def.interactions
 
-    for step in route_def.interactions:
+    for idx, step in enumerate(interactions):
         action = next(iter(step))
         value = step[action]
 
         if action == "screenshot":
+            # Highlight the next interactive element before capturing
+            next_sel, next_action = _get_next_action(interactions, idx)
+            highlight_info: dict | None = None
+            if next_sel:
+                highlight_info = await page.evaluate(
+                    _HIGHLIGHT_JS, [next_sel, str(ss_index)]
+                )
+                if highlight_info:
+                    await page.wait_for_timeout(150)
+
             ss_filename = f"{tag}-{ss_index:02d}.png"
             ss_path = screenshot_dir / ss_filename
             result = await capture_page(page, ss_path, ss_config)
+
+            # Build enriched description with highlight context for the LLM
+            desc = value
+            if highlight_info and highlight_info.get("text"):
+                el_text = highlight_info["text"]
+                action_verb = {
+                    "click": "Click", "fill": "Type into", "select": "Select from"
+                }.get(next_action or "", "Use")
+                desc += f' — ACTION: {action_verb} "{el_text}" (highlighted)'
+
             filenames.append(ss_filename)
-            descriptions.append(value)
-            console.print(f"    Screenshot {ss_index}: {result.size_kb} KB — {value}")
+            descriptions.append(desc)
+
+            # Crop inset around highlighted element
+            if highlight_info and highlight_info.get("w"):
+                _crop_inset(
+                    ss_path, highlight_info,
+                    ss_config.viewport_width, ss_config.viewport_height,
+                )
+
+            hl_label = ""
+            if highlight_info:
+                el_text = highlight_info.get("text", "")[:30]
+                hl_label = f' \\[hl: "{el_text}"]'
+            console.print(
+                f"    Screenshot {ss_index}: {result.size_kb} KB{hl_label} — {value}"
+            )
             ss_index += 1
+
+            # Remove highlight after capture
+            if highlight_info:
+                await page.evaluate(_REMOVE_HIGHLIGHT_JS)
 
         elif action == "click":
             await page.click(value, timeout=10000)
@@ -189,8 +385,9 @@ async def run_pipeline(
     )
     text_provider = get_provider("text")
 
-    session = BrowserSession(ss_config)
+    session = BrowserSession(ss_config, auth=capture_config.auth)
     await session.start()
+    await session.login_with_credentials()
 
     results: list[dict[str, Any]] = []
 

@@ -24,10 +24,15 @@ class AnthropicProvider(BaseProvider):
             msg = "Anthropic provider requires the anthropic package. Install with: uv sync --extra providers-anthropic"
             raise ImportError(msg) from e
 
-        api_key_env = self.config.api_key_env or "ANTHROPIC_API_KEY"
-        api_key = os.environ.get(api_key_env)
+        # Try settings first, then env var fallback
+        from octoauthor.core.config import get_settings
+
+        api_key = get_settings().anthropic_api_key
         if not api_key:
-            msg = f"Anthropic API key not found in environment variable: {api_key_env}"
+            api_key_env = self.config.api_key_env or "ANTHROPIC_API_KEY"
+            api_key = os.environ.get(api_key_env)
+        if not api_key:
+            msg = "Anthropic API key not found. Set OCTOAUTHOR_ANTHROPIC_API_KEY in .env"
             raise ValueError(msg)
 
         return anthropic.AsyncAnthropic(api_key=api_key)
