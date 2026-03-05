@@ -42,6 +42,7 @@ npm-debug.log*
 
 # Generated docs output
 output/
+docs/user-guide/
 .cache/
 
 # Screenshots (generated, not committed)

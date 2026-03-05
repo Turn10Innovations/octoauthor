@@ -101,9 +101,9 @@ src/octoauthor/mcp_servers/{server_name}/
 └── config.py          # Server-specific configuration
 ```
 
-### 5. OctoAuthor is the Garage, Not the Mechanic
+### 5. OctoAuthor is a Tool Platform, Not an Orchestrator
 
-OctoAuthor is a **service** that exposes tools, specs, and playbooks. The orchestrator (OpenClaw, or any agentic framework) is a **separate system** that connects remotely, discovers capabilities, and does the work.
+OctoAuthor is a **Tool Platform** that exposes MCP servers, specs, and playbooks. The orchestrator (OpenClaw, or any agentic framework) is a **separate system** that connects remotely, discovers capabilities, and does the work.
 
 **OctoAuthor NEVER embeds or runs the orchestrator.** It provides:
 - MCP servers over **HTTP+SSE** (remotely connectable, not stdio)
@@ -113,7 +113,7 @@ OctoAuthor is a **service** that exposes tools, specs, and playbooks. The orches
 
 ```
 ┌─────────────────────────────────────────────┐
-│  OpenClaw / Any Orchestrator (THE MECHANIC) │
+│  OpenClaw / Any Orchestrator                │
 │  - Runs on its own server/machine           │
 │  - Connects to OctoAuthor remotely          │
 │  - Reads playbooks to understand its role   │
@@ -122,11 +122,11 @@ OctoAuthor is a **service** that exposes tools, specs, and playbooks. The orches
                │ HTTP+SSE (MCP protocol)
                ▼
 ┌─────────────────────────────────────────────┐
-│  OctoAuthor Service (THE GARAGE)            │
+│  OctoAuthor Tool Platform                   │
 │  - Exposes MCP servers as HTTP endpoints    │
 │  - Serves playbooks and specs               │
 │  - Provides discovery API                   │
-│  - Does NOT know or care who the mechanic is│
+│  - Does NOT know or care who connects       │
 └─────────────────────────────────────────────┘
 ```
 
@@ -233,10 +233,10 @@ OctoAuthor generates docs that MUST pass its own standards. The specs in `specs/
 
 ## Project Architecture
 
-OctoAuthor follows the **Garage/Mechanic** pattern: OctoAuthor is the garage (service + tools), the orchestrator is the mechanic (connects remotely, does the work).
+OctoAuthor follows the **Tool Platform** pattern: OctoAuthor is the platform (service + tools), the orchestrator connects remotely and does the work.
 
 ```
-THE MECHANIC (external, untrusted)          THE GARAGE (OctoAuthor service)
+ORCHESTRATOR (external, untrusted)         TOOL PLATFORM (OctoAuthor service)
 ┌──────────────────────────┐               ┌──────────────────────────────────┐
 │  OpenClaw / Any Agent    │               │  OctoAuthor Service              │
 │  Framework               │   HTTP+SSE    │                                  │
@@ -250,7 +250,7 @@ THE MECHANIC (external, untrusted)          THE GARAGE (OctoAuthor service)
 │  Runs on its own server. │               │  └── app-inspector      :8104    │
 └──────────────────────────┘               │                                  │
                                            │  Playbooks (agent role defs):    │
-THE AUDITOR (separate, trusted)            │  ├── navigator.yaml              │
+AUDITOR (separate, trusted)                │  ├── navigator.yaml              │
 ┌──────────────────────────┐               │  ├── writer.yaml                 │
 │  Auditor Agent           │   HTTP+SSE    │  ├── graphic-designer.yaml       │
 │  (own credentials,       │◄─────────────►│  └── qa-reviewer.yaml            │
@@ -260,7 +260,7 @@ THE AUDITOR (separate, trusted)            │  ├── navigator.yaml        
 │  Posts findings          │               │  └── tag-schema.yaml             │
 │  Labels pass/flag/block  │               └──────────────────────────────────┘
 └──────────────────────────┘
-                                           THE GATES (GitHub, independent)
+                                           SECURITY GATES (GitHub, independent)
                                            ┌──────────────────────────────────┐
                                            │  Gate 1: GitHub Actions (static) │
                                            │  Gate 2: Auditor Agent (AI)      │

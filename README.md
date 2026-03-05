@@ -17,28 +17,31 @@ Unlike commercial tools (Scribe, Tango, Guidde), OctoAuthor is:
 
 ## Architecture
 
+Think of OctoAuthor as a garage stocked with specialized tools — any mechanic (orchestrator) can walk in, discover what's available, and get to work. OctoAuthor doesn't care who the mechanic is; it just provides the tools, the specs, and the quality standards.
+
 ```
-OpenClaw (orchestrator — untrusted worker)
-├── MCP Servers (tools)
-│   ├── screenshot-server    → Playwright navigation + capture
-│   ├── doc-writer-server    → Markdown generation
-│   ├── visual-qa-server     → Screenshot validation + visual diff
-│   ├── doc-store-server     → Doc repository management
-│   └── app-inspector-server → DOM analysis, route discovery
-│
-├── Agents (OpenClaw skills)
-│   ├── Navigator            → Walks app, captures flows
-│   ├── Writer               → Generates prose from captures
-│   ├── Graphic Designer     → Validates/annotates screenshots
-│   └── QA Reviewer          → Checks docs against style guide
-│
-├── Auditor (SEPARATE trusted process — not OpenClaw)
-│   └── Security review (content safety, PII detection, prompt injection)
-│
-└── Security Gates
-    ├── Gate 1: GitHub Actions (static analysis)
-    ├── Gate 2: Auditor Agent (AI security review)
-    └── Gate 3: Human Review (merge approval)
+Orchestrator (external, untrusted)        OctoAuthor Tool Platform
+┌────────────────────────────┐            ┌─────────────────────────────────┐
+│ OpenClaw / Any Agent       │  HTTP+SSE  │ MCP Servers (the tools):        │
+│ Framework                  │◄──────────►│ ├── screenshot-server  :8100    │
+│                            │   (MCP)    │ ├── doc-writer-server  :8101    │
+│ Reads playbooks            │            │ ├── doc-store-server   :8102    │
+│ Uses MCP tools             │            │ ├── visual-qa-server   :8103    │
+│ Follows specs              │            │ └── app-inspector      :8104    │
+│ Creates PRs                │            │                                 │
+└────────────────────────────┘            │ Discovery API (/api/v1/discover)│
+                                          │ Playbooks (agent role defs)     │
+Auditor (separate, trusted)               │ Specs (quality standards)       │
+┌────────────────────────────┐            └─────────────────────────────────┘
+│ Security review agent      │  HTTP+SSE
+│ (own credentials, own box) │◄──────────►  (same MCP servers)
+│ Reviews PRs, posts labels  │
+└────────────────────────────┘
+
+Security Gates (GitHub, independent)
+├── Gate 1: GitHub Actions (static analysis)
+├── Gate 2: Auditor Agent (AI security review)
+└── Gate 3: Human Review (merge approval)
 ```
 
 ## Zero-Trust Security Model
