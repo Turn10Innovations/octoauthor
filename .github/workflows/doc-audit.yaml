@@ -1,0 +1,123 @@
+# OctoAuthor Documentation Audit Pipeline
+# Runs on PRs from openclaw/* branches
+# Implements Gate 1 (static analysis) and triggers Gate 2 (auditor agent)
+
+name: Documentation Audit
+
+on:
+  pull_request:
+    branches: [dev, master]
+    paths:
+      - 'docs/user-guide/**'
+      - 'specs/**'
+
+permissions:
+  contents: read
+  pull-requests: write
+
+jobs:
+  # ============================================================
+  # GATE 1: Static Analysis (deterministic, no AI)
+  # ============================================================
+  static-analysis:
+    name: "Gate 1: Static Analysis"
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Markdown Lint
+        uses: DavidAnson/markdownlint-cli2-action@v16
+        with:
+          globs: 'docs/user-guide/**/*.md'
+
+      - name: Check for HTML script tags
+        run: |
+          echo "Checking for prohibited HTML in markdown..."
+          if grep -rn '<script\|<iframe\|onclick=\|onerror=\|onload=\|javascript:' docs/user-guide/ --include="*.md"; then
+            echo "::error::Prohibited HTML found in documentation files"
+            exit 1
+          fi
+          echo "No prohibited HTML found."
+
+      - name: Check for external image URLs
+        run: |
+          echo "Checking for external image references..."
+          if grep -rn '!\[.*\](http' docs/user-guide/ --include="*.md"; then
+            echo "::error::External image URLs found. All images must be local."
+            exit 1
+          fi
+          echo "All images are local."
+
+      - name: URL allowlist check
+        run: |
+          echo "Checking URLs against allowlist..."
+          # Extract all URLs from markdown files
+          urls=$(grep -rohP 'https?://[^\s\)\"]+' docs/user-guide/**/*.md 2>/dev/null || true)
+          if [ -n "$urls" ]; then
+            echo "Found URLs in docs - manual review required:"
+            echo "$urls"
+            # TODO: Check against allowlist from config
+          fi
+
+      - name: Secret scanning
+        uses: trufflesecurity/trufflehog@main
+        with:
+          path: docs/user-guide/
+          extra_args: --only-verified
+
+      - name: Validate image files
+        run: |
+          echo "Validating image files..."
+          for img in docs/user-guide/assets/*.png; do
+            [ -f "$img" ] || continue
+            size=$(stat -f%z "$img" 2>/dev/null || stat --printf="%s" "$img" 2>/dev/null)
+            max_size=$((500 * 1024))
+            if [ "$size" -gt "$max_size" ]; then
+              echo "::error::Image $img exceeds 500KB limit (${size} bytes)"
+              exit 1
+            fi
+          done
+          echo "All images within size limits."
+
+      - name: Check for hidden unicode
+        run: |
+          echo "Checking for hidden unicode characters..."
+          # Check for zero-width spaces, RTL overrides, and other invisible chars
+          if grep -rPn '[\x{200B}\x{200C}\x{200D}\x{FEFF}\x{202A}-\x{202E}\x{2066}-\x{2069}]' docs/user-guide/ --include="*.md" 2>/dev/null; then
+            echo "::error::Hidden unicode characters found in documentation"
+            exit 1
+          fi
+          echo "No hidden unicode found."
+
+  # ============================================================
+  # GATE 2: Auditor Agent (AI-powered security review)
+  # ============================================================
+  auditor:
+    name: "Gate 2: AI Security Audit"
+    runs-on: ubuntu-latest
+    needs: static-analysis
+    if: startsWith(github.head_ref, 'openclaw/')
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install OctoAuthor
+        run: |
+          pip install uv
+          uv sync --extra providers-anthropic
+
+      - name: Run Auditor Agent
+        env:
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          uv run octoauthor audit \
+            --pr ${{ github.event.pull_request.number }} \
+            --repo ${{ github.repository }}
+
+      # The auditor agent posts its findings as a PR review comment
+      # and labels the PR with auditor:passed, auditor:flagged, or auditor:blocked

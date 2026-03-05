@@ -1,0 +1,69 @@
+# OctoAuthor Tag Schema v1.0
+# Tags are the bridge between app screens and documentation.
+# Each screen in the target app registers a tag that maps to a doc bundle.
+
+version: "1.0"
+
+# Tag naming convention
+naming:
+  format: kebab-case
+  pattern: "{area}-{screen}[-{subscreen}]"
+  examples:
+    - company-maintenance        # Main company list/management screen
+    - company-maintenance-create # Create company form
+    - user-management            # User list screen
+    - user-management-roles      # Role assignment sub-screen
+    - feature-management         # Feature enablement screen
+    - dashboard-overview         # Main dashboard
+
+# How tags are registered in the target app
+registration:
+  # Frontend: component-level tag registration
+  frontend:
+    pattern: |
+      // In your React component:
+      import { HelpButton } from '@octoauthor/react'
+
+      export function CompanyMaintenancePage() {
+        return (
+          <div>
+            <h1>Companies <HelpButton tag="company-maintenance" /></h1>
+            {/* ... */}
+          </div>
+        )
+      }
+
+  # Backend: endpoint-level tag registration (for API docs)
+  backend:
+    pattern: |
+      # In your FastAPI route:
+      @router.get("/companies", tags=["companies"])
+      @doc_tag("company-maintenance")  # OctoAuthor tag
+      async def list_companies():
+          pass
+
+# Tag resolution order (for contextual help)
+resolution:
+  - exact_match        # tag="company-maintenance-create" → exact doc
+  - parent_fallback    # tag="company-maintenance-create" → "company-maintenance" if no exact
+  - category_index     # No match → show category index (e.g., all "admin" docs)
+  - search             # Last resort → full-text search across all docs
+
+# Deployment directories (where docs are stored per project)
+deployment:
+  # Standard location within any project
+  base_path: "docs/user-guide"
+  structure: |
+    docs/user-guide/
+    ├── manifest.yaml          # Index of all docs with tags
+    ├── assets/                # All screenshots
+    │   ├── company-maintenance-list-01.png
+    │   └── ...
+    ├── admin/                 # Category directories
+    │   ├── company-maintenance.md
+    │   └── user-management.md
+    ├── features/
+    │   ├── feature-management.md
+    │   └── ...
+    └── setup/
+        └── initial-setup.md

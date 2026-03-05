@@ -1,0 +1,93 @@
+# OctoAuthor Documentation Standard v1.0
+# This spec is machine-readable and enforced by the QA Reviewer agent.
+# ALL generated documentation MUST pass every rule in this file.
+
+version: "1.0"
+
+metadata_requirements:
+  required_fields:
+    - tag           # Unique screen identifier (kebab-case)
+    - title         # Human-readable title
+    - version       # App version this doc targets
+    - last_updated  # ISO 8601 date
+    - applies_to    # Product list (e.g., [octohub-core])
+    - route         # App route this doc covers
+    - category      # One of: admin, setup, features, reports, integrations, general
+    - generated_by  # Must be "octoauthor"
+
+  tag_format: "^[a-z][a-z0-9-]+$"  # kebab-case, starts with letter
+  title_max_length: 80
+
+screenshot_requirements:
+  width: 1280
+  height: 800
+  format: png
+  max_file_size_kb: 500
+  naming_pattern: "{tag}-{state}-{step_number}.png"  # e.g., company-maintenance-list-01.png
+  rules:
+    - Must be captured in light mode
+    - Must NOT contain real user data (use demo/seed data)
+    - Must NOT show browser dev tools
+    - Must NOT show personal bookmarks or browser extensions
+    - Must NOT contain visible API keys, tokens, or passwords
+    - Must NOT contain email addresses of real users
+    - Must have alt text for accessibility
+    - Annotations (callouts, arrows) must use consistent style
+
+content_rules:
+  voice: imperative   # "Click Save" not "You should click Save" or "The user clicks Save"
+  max_steps_per_guide: 10  # Split into sub-guides if longer
+  max_guide_length_words: 1500
+
+  structure:
+    required_sections:
+      - title          # H1 heading matching metadata.title
+      - overview       # 1-3 sentence description of what the user will accomplish
+      - prerequisites  # What the user needs before starting (can be "None")
+      - steps          # Numbered step-by-step instructions
+    optional_sections:
+      - tips           # Pro tips or shortcuts
+      - troubleshooting  # Common issues and solutions
+      - related        # Links to related guides
+
+  formatting:
+    - Every clickable UI element must be **bold** on first reference
+    - Form field names must be in `code` formatting
+    - Navigation paths use ">" separator: **Settings** > **Companies** > **Add**
+    - Screenshots placed immediately after the step they illustrate
+    - No orphan screenshots (every screenshot must be referenced in a step)
+
+  prohibited_content:
+    - Terminal/shell commands (this is USER documentation, not developer docs)
+    - Technical jargon without explanation
+    - References to database tables, API endpoints, or code
+    - Instructions to modify configuration files
+    - Instructions to disable security features
+    - Marketing language or superlatives
+    - Placeholder text (Lorem ipsum, TODO, TBD)
+
+terminology:
+  # Enforced glossary - generated docs MUST use these exact terms
+  glossary:
+    login: "Sign in"            # Not "log in", "login", "sign on"
+    logout: "Sign out"          # Not "log out", "logout", "sign off"
+    click: "Click"              # Not "tap", "press", "hit" (unless mobile-specific)
+    dropdown: "dropdown"        # Not "drop-down", "select box", "combo box"
+    checkbox: "checkbox"        # Not "check box", "tick box"
+    dialog: "dialog"            # Not "modal", "popup", "pop-up" (user-facing term)
+    sidebar: "sidebar"          # Not "side bar", "nav panel", "navigation"
+    save: "Save"                # Not "Submit", "Apply", "Confirm" (unless button literally says otherwise)
+
+  # If a UI element's label differs from the glossary, use the ACTUAL label
+  # e.g., if button says "Submit", use "Submit" not "Save"
+  override_rule: "Always match the actual UI label text exactly"
+
+accessibility:
+  - All screenshots must have descriptive alt text
+  - Steps must not rely solely on color references ("click the red button")
+  - Include keyboard shortcuts where available
+
+localization:
+  default_language: en-US
+  date_format: "Month DD, YYYY"  # e.g., "March 5, 2026"
+  # Future: i18n support via translation keys
