@@ -1,4 +1,4 @@
-# OctoAuthor Docker Compose - The Garage Setup
+# OctoAuthor Docker Compose - Tool Platform Setup
 #
 # This runs OctoAuthor as a locked-down service that external orchestrators
 # (OpenClaw, etc.) connect to remotely via HTTP+SSE.
@@ -14,7 +14,7 @@
 services:
   octoauthor:
     build: .
-    container_name: octoauthor-garage
+    container_name: octoauthor-platform
     restart: unless-stopped
 
     # --- Security: drop all capabilities, no privilege escalation ---

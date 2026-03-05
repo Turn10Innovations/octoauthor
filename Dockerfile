@@ -1,6 +1,6 @@
-# OctoAuthor Service - The Garage
+# OctoAuthor Tool Platform
 # This container exposes MCP servers, discovery API, playbooks, and specs.
-# It does NOT run the orchestrator (mechanic) — that connects remotely.
+# It does NOT run the orchestrator — that connects remotely.
 
 FROM python:3.11-slim AS base
 

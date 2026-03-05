@@ -1,8 +1,8 @@
 # OctoAuthor Docker Deployment Guide
 
-## The Garage/Mechanic Model
+## Tool Platform Model
 
-OctoAuthor runs in Docker as a locked-down service ("the garage"). External orchestrators like OpenClaw ("the mechanic") connect to it remotely. If anything blows up, it's just a container — `docker compose down && docker compose up` and you're back.
+OctoAuthor runs in Docker as a locked-down Tool Platform. External orchestrators like OpenClaw connect to it remotely. If anything blows up, it's just a container — `docker compose down && docker compose up` and you're back.
 
 ## Architecture
 
@@ -10,7 +10,7 @@ OctoAuthor runs in Docker as a locked-down service ("the garage"). External orch
 Your Dev Machine
 ┌─────────────────────────────────────────────────────┐
 │                                                     │
-│  Docker: OctoAuthor (the garage)                    │
+│  Docker: OctoAuthor (Tool Platform)                  │
 │  ┌───────────────────────────────────────────────┐  │
 │  │ Discovery API        :8000                    │  │
 │  │ screenshot-server    :8100                    │  │
