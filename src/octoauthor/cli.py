@@ -70,6 +70,7 @@ def run(
     config: str = typer.Option("config.yaml", help="Path to capture config file"),
     target: str = typer.Option(..., help="Base URL of the running target application"),
     dry_run: bool = typer.Option(False, help="Preview what would be generated without writing"),
+    repo: str = typer.Option("", help="GitHub repo (owner/name) to push docs to"),
 ) -> None:
     """Run the full documentation generation pipeline."""
     import asyncio
@@ -80,6 +81,8 @@ def run(
     console.print(f"Config: {config}")
     if dry_run:
         console.print("[yellow]DRY RUN - no files will be written[/yellow]")
+    if repo:
+        console.print(f"Target repo: [bold]{repo}[/bold]")
 
     try:
         asyncio.run(run_pipeline(config_path=config, target_url=target, dry_run=dry_run))
@@ -89,6 +92,44 @@ def run(
     except Exception as e:
         console.print(f"[red]Pipeline error:[/red] {e}")
         raise typer.Exit(1) from None
+
+    # Git integration: branch, commit, push, PR
+    if repo and not dry_run:
+        from octoauthor.core.config import get_settings
+
+        settings = get_settings()
+        token = settings.github_token
+        if not token:
+            console.print("[red]Error:[/red] OCTOAUTHOR_GITHUB_TOKEN required for --repo")
+            raise typer.Exit(1)
+
+        from pathlib import Path as PathObj
+
+        from octoauthor.core.git import GitOps
+
+        console.print(f"\n[bold]Pushing docs to {repo}...[/bold]")
+        git = GitOps(repo=repo, token=token, branch_prefix=settings.github_branch_prefix)
+        git.generate_branch_name()
+        console.print(f"  Branch: {git.branch_name}")
+
+        import tempfile
+
+        with tempfile.TemporaryDirectory() as tmp:
+            console.print("  Cloning (sparse)...")
+            git.clone_sparse(PathObj(tmp))
+            git.create_branch()
+
+            doc_dir = settings.doc_output_dir
+            file_count = git.commit_docs(doc_dir)
+            console.print(f"  Committed {file_count} files")
+
+            console.print("  Pushing...")
+            git.push()
+            console.print("  [green]Pushed![/green]")
+
+            console.print("  Creating PR...")
+            pr_url = asyncio.run(git.create_pr())
+            console.print(f"  [bold green]PR created:[/bold green] {pr_url}")
 
 
 @app.command()
