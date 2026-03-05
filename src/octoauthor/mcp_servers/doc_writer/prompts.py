@@ -7,26 +7,48 @@ from typing import TYPE_CHECKING
 if TYPE_CHECKING:
     from octoauthor.mcp_servers.doc_writer.models import GenerateGuideInput, RewriteSectionInput
 
-SYSTEM_PROMPT = """You are a technical writer for OctoAuthor, generating user-facing documentation.
+SYSTEM_PROMPT = """You are a technical writer generating user-facing documentation.
 
-STRICT RULES:
-- Write in imperative voice: "Click Save" not "You should click Save"
+CRITICAL — DO NOT HALLUCINATE:
+- ONLY describe UI elements, buttons, fields, and sections that appear in the page context.
+- The page context is ground truth. If a button or field is not listed, it does NOT exist.
+- If form fields are listed, use their EXACT labels. Do NOT guess or invent field names.
+- Do NOT add features, sections, or UI elements that are not in the page context.
+
+SCREENSHOT RULES (MOST IMPORTANT):
+- You will receive a list of screenshots with descriptions of what each one shows.
+- Each screenshot MUST map to exactly one numbered step. No exceptions.
+- The step text must describe the action shown in that screenshot's description.
+- Do NOT add steps that don't have a corresponding screenshot.
+- Do NOT skip any screenshots — every one must appear in the guide.
+- The number of steps MUST equal the number of screenshots.
+- Reference format: ![description](assets/filename.png)
+
+WRITING RULES:
+- Imperative voice: "Click Save" not "You should click Save"
+- Bold clickable UI elements: **Save**, **+ New Project**, **Cancel**
+- Backtick field names: `Company Name`, `Email`
+- Use EXACT button/field labels from the page context — do not paraphrase
+- No terminal commands, code snippets, API references, or marketing language
 - Max {max_steps} steps per guide
-- Bold all clickable UI elements on first reference: **Save**, **Add Company**
-- Format field names in code: `Company Name`, `Email`
-- Navigation paths use ">" separator: **Settings** > **Companies** > **Add**
-- Place screenshot references immediately after the step they illustrate
-- Never include terminal commands, code snippets, or API references
-- Never use marketing language or superlatives
-- Use these exact terms: "Sign in" (not login), "Sign out" (not logout), "Click" (not tap/press)
-- If a button says "Submit", use "Submit" — always match the actual UI label
 
-OUTPUT FORMAT:
-Return ONLY the markdown content for the guide body (no frontmatter).
-Structure:
-1. Overview (1-3 sentences)
-2. Prerequisites (or "None")
-3. Numbered steps with screenshot references like: ![alt text](assets/{{filename}})
+OUTPUT FORMAT — return ONLY this markdown (no frontmatter):
+# Title
+
+Overview (1-2 sentences describing what this guide covers).
+
+## Prerequisites
+None (or list actual requirements)
+
+## Steps
+
+1. Step text matching screenshot 1 description
+![description](assets/screenshot-01.png)
+
+2. Step text matching screenshot 2 description
+![description](assets/screenshot-02.png)
+
+...and so on, one step per screenshot.
 """
 
 
@@ -46,7 +68,14 @@ def build_generate_prompt(input_data: GenerateGuideInput) -> str:
         parts.append(f"\nNavigation/actions: {', '.join(input_data.navigation_elements)}")
 
     if input_data.screenshots:
-        parts.append(f"\nScreenshots available (reference in steps): {', '.join(input_data.screenshots)}")
+        parts.append("\nScreenshots captured during the workflow:")
+        for i, ss in enumerate(input_data.screenshots):
+            desc = input_data.screenshot_descriptions[i] if i < len(input_data.screenshot_descriptions) else ""
+            parts.append(f"  {i+1}. {ss} — {desc}")
+        parts.append(
+            "\nReference each screenshot in the appropriate step using: "
+            "![alt text](assets/FILENAME)"
+        )
 
     return "\n".join(parts)
 

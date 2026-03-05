@@ -35,6 +35,7 @@ async def generate_guide(
     version: str,
     applies_to: list[str],
     screenshots: list[str] | None = None,
+    screenshot_descriptions: list[str] | None = None,
     dom_summary: str = "",
     form_fields: list[str] | None = None,
     navigation_elements: list[str] | None = None,
@@ -48,6 +49,7 @@ async def generate_guide(
         version=version,
         applies_to=applies_to,
         screenshots=screenshots or [],
+        screenshot_descriptions=screenshot_descriptions or [],
         dom_summary=dom_summary,
         form_fields=form_fields or [],
         navigation_elements=navigation_elements or [],
@@ -69,6 +71,7 @@ async def generate_guide(
         content_markdown=content,
         step_count=step_count,
         word_count=word_count,
+        screenshot_count=len(screenshots or []),
         provider_used=response.provider,
         model_used=response.model,
     )

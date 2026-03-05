@@ -100,16 +100,16 @@ def audit(
 ) -> None:
     """Run the auditor agent against a PR."""
     import asyncio
-    import os
 
     from rich.table import Table
 
     from octoauthor.auditor import run_audit
+    from octoauthor.core.config import get_settings
     from octoauthor.core.models.agents import AuditSeverity
 
-    token = os.environ.get("GITHUB_TOKEN", "")
+    token = get_settings().github_token or ""
     if not token:
-        console.print("[red]Error:[/red] GITHUB_TOKEN environment variable is required")
+        console.print("[red]Error:[/red] OCTOAUTHOR_GITHUB_TOKEN is required (set in .env or environment)")
         raise typer.Exit(1)
 
     console.print(f"Auditing PR #{pr} on [bold]{repo}[/bold]...")

@@ -50,11 +50,12 @@ class OctoAuthorSettings(BaseSettings):
     )
     audit_model: str = Field(default="claude-sonnet-4-6", description="Audit model")
 
+    # API Keys
+    api_key: str | None = Field(default=None, description="API key for orchestrator authentication")
+    auditor_api_key: str | None = Field(default=None, description="API key for the auditor agent")
+
     # GitHub integration
-    github_token_env: str = Field(
-        default="OCTOAUTHOR_GITHUB_TOKEN",
-        description="Env var name for GitHub PAT",
-    )
+    github_token: str | None = Field(default=None, description="GitHub PAT for PR operations")
     github_branch_prefix: str = Field(
         default="openclaw/doc-update",
         description="Prefix for auto-created branches",

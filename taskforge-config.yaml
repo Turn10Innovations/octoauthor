@@ -1,0 +1,228 @@
+app_name: TaskForge
+viewport_width: 1280
+viewport_height: 800
+light_mode_only: true
+routes:
+  # ── Dashboard ────────────────────────────────────────────────────────────────
+  - route: /
+    tag: dashboard
+    title: Dashboard Overview
+    wait_for: ".stats-grid"
+    interactions:
+      - screenshot: "The Dashboard page showing stat cards for Total Projects, Open Tasks, Completed tasks, and Team Members at the top, with a Recent Tasks table and Active Projects sidebar below"
+      - click: ".recent-tasks a.link"
+      - wait: "#tasksBody"
+      - screenshot: "Clicking View All under Recent Tasks navigates to the full Tasks page"
+      - click: "[href='/']"
+      - wait: ".stats-grid"
+      - click: ".project-summary a.link"
+      - wait: "#projectsBody"
+      - screenshot: "Clicking View All under Active Projects navigates to the full Projects page"
+
+  # ── Projects: Full CRUD ──────────────────────────────────────────────────────
+  - route: /projects.html
+    tag: create-project
+    title: Creating a New Project
+    wait_for: "#projectsBody"
+    interactions:
+      - screenshot: "The Projects list page showing all projects in a table with columns for Project, Lead, Tasks, Progress, Status, and Due Date"
+      - click: "button.btn-primary"
+      - wait: ".modal-overlay.open"
+      - screenshot: "The Create New Project modal with empty fields for Project Name, Project Lead, Due Date, Description, Color, and Status"
+      - fill: "#projName|API Gateway"
+      - select: "#projLead|Amir Khan"
+      - fill: "#projDue|2026-06-15"
+      - fill: "#projDesc|Build a unified API gateway for all microservices"
+      - select: "#projColor|#4cc9f0"
+      - screenshot: "The Create New Project form filled in with Project Name 'API Gateway', Project Lead 'Amir Khan', Due Date '06/15/2026', Description text, and Color set to Cyan"
+      - click: "#projectSubmitBtn"
+      - wait_hidden: ".modal-overlay.open"
+      - screenshot: "The Projects list now shows the new 'API Gateway' project at the bottom of the table with a green 'Project created successfully' toast notification"
+
+  - route: /projects.html
+    tag: edit-project
+    title: Editing a Project
+    wait_for: "#projectsBody"
+    interactions:
+      - screenshot: "The Projects list page with existing projects including Platform v2, Auth Service, Infrastructure, Mobile App, and Data Pipeline"
+      - click: "tr:nth-child(1) .btn-icon[title='Edit']"
+      - wait: ".modal-overlay.open"
+      - screenshot: "The Edit Project modal opens pre-filled with the selected project's current details — name, lead, due date, description, color, and status"
+      - fill: "#projDesc|Next-generation platform rebuild with new UI, API, and improved performance."
+      - select: "#projStatus|Active"
+      - screenshot: "The Description field has been updated with new text and Status is confirmed as Active"
+      - click: "#projectSubmitBtn"
+      - wait_hidden: ".modal-overlay.open"
+      - screenshot: "The Projects list refreshes showing the updated project details with a 'Project updated successfully' toast"
+
+  - route: /projects.html
+    tag: delete-project
+    title: Deleting a Project
+    wait_for: "#projectsBody"
+    interactions:
+      - screenshot: "The Projects list showing all current projects"
+      - click: "tr:last-child .btn-icon[title='Delete']"
+      - wait: "#deleteModal.open"
+      - screenshot: "A confirmation dialog appears asking 'Are you sure you want to delete [project name]?' with Cancel and Delete Project buttons"
+      - click: "#deleteModal .btn-danger"
+      - wait_hidden: "#deleteModal.open"
+      - screenshot: "The project has been removed from the list and a 'Project deleted' toast notification appears"
+
+  - route: /projects.html
+    tag: filter-projects
+    title: Filtering and Searching Projects
+    wait_for: "#projectsBody"
+    interactions:
+      - screenshot: "The Projects page with the All Projects tab selected showing all projects"
+      - click: "[data-filter='Active']"
+      - screenshot: "Clicking the Active tab filters the list to show only projects with Active status"
+      - click: "[data-filter='Complete']"
+      - screenshot: "Clicking the Completed tab shows only projects marked as Complete"
+      - click: "[data-filter='all']"
+      - fill: "#searchInput|Auth"
+      - screenshot: "Typing 'Auth' in the search field filters the project list in real time to show only matching projects"
+
+  # ── Tasks: Full CRUD + Filters ───────────────────────────────────────────────
+  - route: /tasks.html
+    tag: create-task
+    title: Creating a New Task
+    wait_for: "#tasksBody"
+    interactions:
+      - screenshot: "The Tasks list page showing all tasks in a table with columns for checkbox, Task, Project, Assignee, Priority, Status, and Due Date, with filter dropdowns at the top"
+      - click: "button.btn-primary"
+      - wait: ".modal-overlay.open"
+      - screenshot: "The Create New Task modal with fields for Task Title, Project, Assignee, Priority, Due Date, Status, and Description"
+      - fill: "#taskTitle|Set up rate limiting"
+      - select: "#taskPriority|high"
+      - fill: "#taskDue|2026-04-01"
+      - fill: "#taskDesc|Implement rate limiting on all public API endpoints"
+      - screenshot: "The task form filled in with Title 'Set up rate limiting', Priority 'High', Due Date '04/01/2026', and Description text"
+      - click: "#taskSubmitBtn"
+      - wait_hidden: ".modal-overlay.open"
+      - screenshot: "The new task 'Set up rate limiting' appears at the bottom of the Tasks list with a 'Task created successfully' toast"
+
+  - route: /tasks.html
+    tag: edit-task
+    title: Editing a Task
+    wait_for: "#tasksBody"
+    interactions:
+      - screenshot: "The Tasks list with all current tasks"
+      - click: "tr:nth-child(1) .btn-icon[title='Edit']"
+      - wait: ".modal-overlay.open"
+      - screenshot: "The Edit Task modal opens pre-filled with the selected task's current title, project, assignee, priority, due date, status, and description"
+      - select: "#taskStatus|Done"
+      - screenshot: "The Status field has been changed to Done"
+      - click: "#taskSubmitBtn"
+      - wait_hidden: ".modal-overlay.open"
+      - screenshot: "The Tasks list shows the updated task with its new 'Done' status badge and a 'Task updated successfully' toast"
+
+  - route: /tasks.html
+    tag: delete-task
+    title: Deleting a Task
+    wait_for: "#tasksBody"
+    interactions:
+      - screenshot: "The Tasks list showing all tasks"
+      - click: "tr:nth-child(1) .btn-icon[title='Delete']"
+      - wait: "#deleteModal.open"
+      - screenshot: "A confirmation dialog asks 'Are you sure you want to delete [task name]?' with Cancel and Delete Task buttons"
+      - click: "#deleteModal .btn-danger"
+      - wait_hidden: "#deleteModal.open"
+      - screenshot: "The task has been removed from the list and a 'Task deleted' toast notification confirms the action"
+
+  - route: /tasks.html
+    tag: filter-tasks
+    title: Filtering Tasks
+    wait_for: "#tasksBody"
+    interactions:
+      - screenshot: "The Tasks page with all filter dropdowns set to their defaults: All Projects, All Priorities, All Statuses, All Assignees"
+      - select: "#filterPriority|high"
+      - screenshot: "Selecting 'High' from the Priorities dropdown filters the list to show only high-priority tasks"
+      - select: "#filterPriority|"
+      - select: "#filterStatus|In Progress"
+      - screenshot: "Selecting 'In Progress' from the Statuses dropdown shows only tasks currently in progress"
+      - select: "#filterStatus|"
+      - fill: "#searchInput|login"
+      - screenshot: "Typing 'login' in the search field filters tasks in real time to show only matching results"
+
+  # ── Team: Full CRUD ──────────────────────────────────────────────────────────
+  - route: /team.html
+    tag: invite-member
+    title: Inviting a Team Member
+    wait_for: ".team-grid"
+    interactions:
+      - screenshot: "The Team page showing member cards for all current team members, each displaying their avatar, name, role, email, task count, and project count"
+      - click: "button.btn-primary"
+      - wait: ".modal-overlay.open"
+      - screenshot: "The Invite Team Member modal with fields for Full Name, Email, Role dropdown, and Avatar Color dropdown"
+      - fill: "#memberName|Sarah Chen"
+      - fill: "#memberEmail|sarah.chen@taskforge.io"
+      - select: "#memberRole|Frontend Developer"
+      - select: "#memberColor|#8338ec"
+      - screenshot: "The invite form filled in with Full Name 'Sarah Chen', Email 'sarah.chen@taskforge.io', Role 'Frontend Developer', and Avatar Color 'Purple'"
+      - click: "#inviteForm button[type='submit']"
+      - wait_hidden: ".modal-overlay.open"
+      - screenshot: "The Team page now shows a new card for Sarah Chen with her purple avatar, role, email, and initial task/project counts, plus an 'Invitation sent successfully' toast"
+
+  - route: /team.html
+    tag: view-member
+    title: Viewing Team Member Details
+    wait_for: ".team-grid"
+    interactions:
+      - screenshot: "The Team page showing all member cards"
+      - click: ".member-card:first-child"
+      - wait: "#memberDetailModal.open"
+      - screenshot: "The Member Detail modal shows the selected member's avatar, name, role, email, a list of their assigned tasks with statuses, and the projects they belong to, with a Remove from Team button"
+      - click: "#memberDetailModal .modal-close"
+      - wait_hidden: "#memberDetailModal.open"
+      - screenshot: "Back on the Team page after closing the member detail modal"
+
+  - route: /team.html
+    tag: remove-member
+    title: Removing a Team Member
+    wait_for: ".team-grid"
+    interactions:
+      - screenshot: "The Team page with all current members"
+      - click: ".member-card:last-child"
+      - wait: "#memberDetailModal.open"
+      - screenshot: "The Member Detail modal for the selected member showing their info, assigned tasks, and a red Remove from Team button at the bottom"
+      - click: "#removeMemberBtn"
+      - wait_hidden: "#memberDetailModal.open"
+      - screenshot: "The Team page refreshes with the member removed and a '[Name] removed from team' toast notification"
+
+  # ── Settings: All Tabs ───────────────────────────────────────────────────────
+  - route: /settings.html
+    tag: general-settings
+    title: Configuring General Settings
+    wait_for: ".settings-layout"
+    interactions:
+      - screenshot: "The Settings page with the General tab active, showing Workspace Settings fields (Workspace Name, Default Timezone, Date Format) and Profile fields (Display Name, Email, Role)"
+      - fill: "#wsName|TaskForge Pro"
+      - select: "#wsTz|UTC-5 (Eastern)"
+      - screenshot: "The Workspace Name has been changed to 'TaskForge Pro' and Timezone set to UTC-5 (Eastern)"
+      - click: "#generalForm button[type='submit']"
+      - screenshot: "A 'Settings saved successfully' toast confirms the changes were applied"
+
+  - route: /settings.html
+    tag: notification-settings
+    title: Configuring Notification Preferences
+    wait_for: ".settings-layout"
+    interactions:
+      - screenshot: "The Settings page with the General tab active"
+      - click: "[data-section='notifications']"
+      - screenshot: "The Notifications tab showing toggle switches for Email Notifications (on), Browser Notifications (on), Weekly Digest (off), and Due Date Reminders (on)"
+      - click: ".toggle-row:nth-child(3) .toggle"
+      - screenshot: "The Weekly Digest toggle has been switched on, turning from gray to blue"
+      - click: "#section-notifications .btn-primary"
+      - screenshot: "A 'Notification preferences saved' toast confirms the updated notification settings"
+
+  - route: /settings.html
+    tag: reset-data
+    title: Resetting Workspace Data
+    wait_for: ".settings-layout"
+    interactions:
+      - screenshot: "The Settings page with the General tab active"
+      - click: "[data-section='danger']"
+      - screenshot: "The Danger Zone tab showing two options: Reset All Data with a red Reset Data button, and Export Data with an Export button"
+      - click: "#section-danger .btn-danger.btn-sm"
+      - wait: "#resetModal.open"
+      - screenshot: "A confirmation modal warns 'This will delete all your projects, tasks, and team data' with Cancel and 'Yes, Reset Everything' buttons"

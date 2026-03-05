@@ -12,11 +12,12 @@ class RouteCapture(BaseModel):
     wait_for: str | None = Field(default=None, description="CSS selector to wait for before capture")
     interactions: list[dict[str, str]] = Field(
         default_factory=list,
-        description="Ordered interactions to perform (e.g., [{'click': '#add-btn'}, {'fill': '#name'}])",
-    )
-    capture_states: list[str] = Field(
-        default_factory=list,
-        description="Named states to capture (e.g., ['empty', 'filled', 'submitted'])",
+        description=(
+            "Ordered interactions and screenshots. Each dict has one key: "
+            "'click', 'fill' (selector|value), 'select' (selector|value), "
+            "'wait' (selector), 'wait_hidden' (selector), or "
+            "'screenshot' (description for the doc writer)."
+        ),
     )
 
 
@@ -29,7 +30,6 @@ class CaptureConfig(BaseModel):
     viewport_width: int = Field(default=1280, description="Browser viewport width")
     viewport_height: int = Field(default=800, description="Browser viewport height")
     routes: list[RouteCapture] = Field(description="Routes to capture")
-    demo_data_script: str | None = Field(default=None, description="Script to seed demo data before capture")
     light_mode_only: bool = Field(default=True, description="Force light mode for captures")
 
 
@@ -38,14 +38,9 @@ class CaptureResult(BaseModel):
 
     route: str = Field(description="Route that was captured")
     tag: str = Field(description="Doc tag for this capture")
-    screenshots: list[str] = Field(description="Paths to captured screenshot files")
-    dom_snapshot: dict | None = Field(default=None, description="Simplified DOM structure of the page")
-    form_fields: list[dict[str, str]] = Field(
+    screenshots: list[str] = Field(description="Filenames of captured screenshots")
+    screenshot_descriptions: list[str] = Field(
         default_factory=list,
-        description="Discovered form fields with labels and types",
-    )
-    navigation_elements: list[dict[str, str]] = Field(
-        default_factory=list,
-        description="Discovered navigation/action elements",
+        description="Human description of what each screenshot shows",
     )
     errors: list[str] = Field(default_factory=list, description="Any errors during capture")

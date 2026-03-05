@@ -117,7 +117,7 @@ class TestRouteCapture:
     def test_minimal(self) -> None:
         rc = RouteCapture(route="/companies", tag="company-maint", title="Companies")
         assert rc.interactions == []
-        assert rc.capture_states == []
+        assert rc.wait_for is None
 
 
 class TestCaptureConfig:
@@ -141,7 +141,7 @@ class TestCaptureResult:
             screenshots=["/tmp/s1.png"],
         )
         assert result.errors == []
-        assert result.form_fields == []
+        assert result.screenshot_descriptions == []
 
 
 class TestAgentModels:
