@@ -1,0 +1,11 @@
+app_name: Acme CRM
+viewport_width: 1280
+viewport_height: 800
+light_mode_only: true
+routes:
+  - route: /index.html
+    tag: company-list
+    title: Company List
+  - route: /contacts.html
+    tag: contact-list
+    title: Contact List
