@@ -7,8 +7,9 @@ FROM python:3.11-slim AS base
 # Security: non-root user
 RUN groupadd -r octoauthor && useradd -r -g octoauthor -m octoauthor
 
-# Install system dependencies for Playwright
+# Install system dependencies for Playwright + git (for pipeline)
 RUN apt-get update && apt-get install -y --no-install-recommends \
+    git \
     libnss3 \
     libnspr4 \
     libatk1.0-0 \
@@ -26,6 +27,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     libpango-1.0-0 \
     libcairo2 \
     libasound2 \
+    fonts-dejavu-core \
     && rm -rf /var/lib/apt/lists/*
 
 # Install uv
@@ -34,19 +36,19 @@ COPY --from=ghcr.io/astral-sh/uv:latest /uv /usr/local/bin/uv
 WORKDIR /app
 
 # Copy dependency files first (cache layer)
-COPY pyproject.toml uv.lock ./
+COPY pyproject.toml uv.lock README.md ./
 
-# Install dependencies
-RUN uv sync --frozen --no-dev
-
-# Install Playwright browsers
-RUN uv run playwright install chromium
-
-# Copy application code
+# Copy application code (needed for editable install)
 COPY src/ src/
 COPY specs/ specs/
 COPY playbooks/ playbooks/
 COPY VERSION ./
+
+# Install dependencies + the package itself (skip dev group, include anthropic)
+RUN uv sync --frozen --no-group dev --extra providers-anthropic
+
+# Install Playwright browsers
+RUN uv run playwright install chromium
 
 # Security: read-only filesystem for app code
 # The /workspace volume is the only writable location
@@ -56,13 +58,13 @@ RUN mkdir -p /workspace && chown octoauthor:octoauthor /workspace
 USER octoauthor
 
 # Expose ports for MCP servers + discovery API
-# 8000 = Discovery API + Playbook/Spec server
-# 8100-8104 = MCP servers
-EXPOSE 8000 8100 8101 8102 8103 8104
+# 9210 = Discovery API + Playbook/Spec server
+# 9211-9215 = MCP servers
+EXPOSE 9210 9211 9212 9213 9214 9215
 
 # Health check
 HEALTHCHECK --interval=30s --timeout=5s --start-period=10s --retries=3 \
-    CMD uv run python -c "import httpx; httpx.get('http://localhost:8000/health').raise_for_status()"
+    CMD uv run python -c "import httpx; httpx.get('http://localhost:9210/health').raise_for_status()"
 
-# Default command: start all services
-CMD ["uv", "run", "octoauthor", "serve", "--all"]
+# Default command: start all services (use 0.0.0.0 for container networking)
+CMD ["uv", "run", "octoauthor", "serve", "all", "--host", "0.0.0.0"]

@@ -5,7 +5,6 @@
 #
 # Port configuration:
 # All ports are configurable via .env file (OCTOAUTHOR_ prefix).
-# Copy .env.example to .env and adjust as needed.
 #
 # Security model:
 # - Read-only filesystem (except /workspace volume)
@@ -13,7 +12,6 @@
 # - Network limited to exposed ports only
 # - Non-root user
 # - Resource limits enforced
-# - All egress blocked except allowlisted domains
 
 services:
   octoauthor:
@@ -38,6 +36,11 @@ services:
         target: /tmp
         tmpfs:
           size: 256M
+      # uv cache dir (read-only filesystem workaround)
+      - type: tmpfs
+        target: /home/octoauthor/.cache
+        tmpfs:
+          size: 64M
 
     # --- Resource limits ---
     deploy:
@@ -50,8 +53,6 @@ services:
           cpus: "0.5"
 
     # --- Ports exposed to the network ---
-    # All ports are read from .env via the OCTOAUTHOR_ prefix.
-    # The container listens on the same port internally and externally.
     ports:
       - "${OCTOAUTHOR_API_PORT:-9210}:${OCTOAUTHOR_API_PORT:-9210}"
       - "${OCTOAUTHOR_MCP_PORT_SCREENSHOT:-9211}:${OCTOAUTHOR_MCP_PORT_SCREENSHOT:-9211}"
@@ -62,7 +63,7 @@ services:
 
     # --- Environment ---
     # Most settings come from .env via env_file above.
-    # Only override container-specific paths here.
+    # Override container-specific values here.
     environment:
       - OCTOAUTHOR_DOC_OUTPUT_DIR=/workspace/docs
       - OCTOAUTHOR_SCREENSHOT_OUTPUT_DIR=/workspace/screenshots

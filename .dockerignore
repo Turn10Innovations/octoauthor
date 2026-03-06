@@ -1,0 +1,46 @@
+# Git
+.git/
+.gitignore
+
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+dist/
+build/
+.venv/
+.eggs/
+
+# IDE
+.idea/
+.vscode/
+*.swp
+
+# Test / Coverage
+htmlcov/
+.coverage
+.pytest_cache/
+.ruff_cache/
+tests/
+
+# Environment (secrets)
+.env
+.env.local
+.env.*.local
+
+# Docker
+Dockerfile
+docker-compose.yaml
+.dockerignore
+
+# Docs / output
+docs/user-guide/
+output/
+screenshots/
+
+# Node
+node_modules/
+
+# Claude
+.claude/
+CLAUDE.md
