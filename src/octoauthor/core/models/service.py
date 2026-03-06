@@ -8,7 +8,7 @@ class MCPServerInfo(BaseModel):
 
     name: str = Field(description="Server name (e.g., 'screenshot-server')")
     url: HttpUrl = Field(description="URL to connect to this MCP server")
-    transport: str = Field(default="sse", description="MCP transport type (sse or streamable-http)")
+    transport: str = Field(default="streamable-http", description="MCP transport type")
     description: str = Field(default="", description="What this server does")
     tools: list[str] = Field(default_factory=list, description="List of tool names this server provides")
 

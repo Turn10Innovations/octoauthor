@@ -14,7 +14,7 @@ if TYPE_CHECKING:
 from octoauthor import __version__
 from octoauthor.core.logging import get_logger
 from octoauthor.core.models.service import DiscoveryResponse, MCPServerInfo, PlaybookInfo
-from octoauthor.mcp_servers.registry import get_server_ports
+from octoauthor.mcp_servers.registry import MOUNT_SLUGS, SERVER_NAMES
 
 logger = get_logger(__name__)
 
@@ -34,11 +34,13 @@ async def discover(request: Request) -> JSONResponse:
     host = _get_host(request)
 
     mcp_servers = []
-    for name, port in get_server_ports().items():
+    for name in SERVER_NAMES:
+        slug = MOUNT_SLUGS[name]
         mcp_servers.append(
             MCPServerInfo(
                 name=name,
-                url=f"{host.rsplit(':', 1)[0]}:{port}/mcp",
+                url=f"{host}/mcp/{slug}",
+                transport="streamable-http",
                 description=_server_descriptions.get(name, ""),
                 tools=[],
             ).model_dump(mode="json")
@@ -98,4 +100,6 @@ _server_descriptions: dict[str, str] = {
     "doc-writer-server": "LLM-powered documentation generation",
     "visual-qa-server": "Screenshot validation and visual diff",
     "app-inspector-server": "DOM analysis and route discovery",
+    "code-reader-server": "Read-only access to target application source code",
+    "git-ops-server": "Git branch, commit, push, and PR operations",
 }

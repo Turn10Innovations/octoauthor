@@ -193,7 +193,7 @@ class TestServiceModels:
             description="Document storage",
             tools=["store_doc", "get_doc"],
         )
-        assert info.transport == "sse"
+        assert info.transport == "streamable-http"
 
     def test_discovery_response(self) -> None:
         resp = DiscoveryResponse(

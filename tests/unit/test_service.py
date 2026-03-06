@@ -48,7 +48,7 @@ class TestDiscovery:
         data = resp.json()
         assert data["service"] == "octoauthor"
         assert "version" in data
-        assert len(data["mcp_servers"]) == 5
+        assert len(data["mcp_servers"]) == 7
         server_names = {s["name"] for s in data["mcp_servers"]}
         assert "doc-store-server" in server_names
         assert "screenshot-server" in server_names

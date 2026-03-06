@@ -22,7 +22,11 @@ _PUBLIC_PATHS = {"/health", "/"}
 
 
 class APIKeyMiddleware(BaseHTTPMiddleware):
-    """Validates X-API-Key header against configured API keys."""
+    """Validates X-API-Key header against configured API keys.
+
+    MCP paths (/mcp/*) are excluded — they use MCP-native Bearer auth
+    via TokenVerifier instead.
+    """
 
     def __init__(self, app: ASGIApp) -> None:
         super().__init__(app)
@@ -31,6 +35,10 @@ class APIKeyMiddleware(BaseHTTPMiddleware):
 
     async def dispatch(self, request: Request, call_next) -> Response:  # type: ignore[type-arg, no-untyped-def]
         if request.url.path in _PUBLIC_PATHS:
+            return await call_next(request)
+
+        # MCP sub-apps handle their own auth via Bearer tokens
+        if request.url.path.startswith("/mcp/"):
             return await call_next(request)
 
         # Skip auth if no keys configured (development mode)

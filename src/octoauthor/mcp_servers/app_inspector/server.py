@@ -19,6 +19,7 @@ from octoauthor.mcp_servers.screenshot.config import ScreenshotConfig
 
 def create_app_inspector_server(
     config: AppInspectorConfig | None = None,
+    **mcp_kwargs: Any,
 ) -> FastMCP:
     """Create and configure the app-inspector MCP server."""
     if config is None:
@@ -39,6 +40,7 @@ def create_app_inspector_server(
         name="app-inspector-server",
         instructions="Inspects web application pages: DOM analysis, route discovery, form discovery, action discovery.",
         lifespan=lifespan,
+        **mcp_kwargs,
     )
 
     @mcp.tool()

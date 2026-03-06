@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+from typing import Any
 
 from mcp.server.fastmcp import FastMCP
 
@@ -10,7 +11,10 @@ from octoauthor.mcp_servers.doc_writer import tools as tool_impl
 from octoauthor.mcp_servers.doc_writer.config import DocWriterConfig
 
 
-def create_doc_writer_server(config: DocWriterConfig | None = None) -> FastMCP:
+def create_doc_writer_server(
+    config: DocWriterConfig | None = None,
+    **mcp_kwargs: Any,
+) -> FastMCP:
     """Create and configure the doc-writer MCP server."""
     if config is None:
         config = DocWriterConfig()
@@ -18,6 +22,7 @@ def create_doc_writer_server(config: DocWriterConfig | None = None) -> FastMCP:
     mcp = FastMCP(
         name="doc-writer-server",
         instructions="Documentation writer server. Generate and validate user documentation guides.",
+        **mcp_kwargs,
     )
 
     def _get_provider():  # type: ignore[no-untyped-def]

@@ -62,6 +62,20 @@ class OctoAuthorSettings(BaseSettings):
         description="Prefix for auto-created branches",
     )
 
+    # Target application
+    target_base_url: str | None = Field(
+        default=None,
+        description="Base URL of the target application (e.g., http://localhost:3000)",
+    )
+    code_source_type: str = Field(
+        default="local",
+        description="Code source: 'local' (filesystem) or 'github' (API)",
+    )
+    code_source_path: str = Field(
+        default=".",
+        description="Local path or 'owner/repo' for GitHub source",
+    )
+
     # Ports — configurable to avoid conflicts with other services
     api_port: int = Field(default=9210, description="Discovery API port")
     mcp_port_screenshot: int = Field(default=9211, description="Screenshot MCP server port")
@@ -69,6 +83,8 @@ class OctoAuthorSettings(BaseSettings):
     mcp_port_doc_store: int = Field(default=9213, description="Doc store MCP server port")
     mcp_port_visual_qa: int = Field(default=9214, description="Visual QA MCP server port")
     mcp_port_app_inspector: int = Field(default=9215, description="App inspector MCP server port")
+    mcp_port_code_reader: int = Field(default=9216, description="Code reader MCP server port")
+    mcp_port_git_ops: int = Field(default=9217, description="Git ops MCP server port")
 
     # Security
     url_allowlist: list[str] = Field(

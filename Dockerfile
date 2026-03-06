@@ -57,10 +57,8 @@ RUN mkdir -p /workspace && chown octoauthor:octoauthor /workspace
 # Switch to non-root user
 USER octoauthor
 
-# Expose ports for MCP servers + discovery API
-# 9210 = Discovery API + Playbook/Spec server
-# 9211-9215 = MCP servers
-EXPOSE 9210 9211 9212 9213 9214 9215
+# Expose single unified port (API + all MCP servers)
+EXPOSE 9210
 
 # Health check
 HEALTHCHECK --interval=30s --timeout=5s --start-period=10s --retries=3 \

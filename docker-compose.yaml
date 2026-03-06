@@ -1,7 +1,7 @@
 # OctoAuthor Docker Compose - Tool Platform Setup
 #
 # This runs OctoAuthor as a locked-down service that external orchestrators
-# (OpenClaw, etc.) connect to remotely via HTTP+SSE.
+# (OpenClaw, etc.) connect to remotely via Streamable HTTP (MCP).
 #
 # Port configuration:
 # All ports are configurable via .env file (OCTOAUTHOR_ prefix).
@@ -52,14 +52,9 @@ services:
           memory: 1G
           cpus: "0.5"
 
-    # --- Ports exposed to the network ---
+    # --- Single unified port (API + all MCP servers) ---
     ports:
       - "${OCTOAUTHOR_API_PORT:-9210}:${OCTOAUTHOR_API_PORT:-9210}"
-      - "${OCTOAUTHOR_MCP_PORT_SCREENSHOT:-9211}:${OCTOAUTHOR_MCP_PORT_SCREENSHOT:-9211}"
-      - "${OCTOAUTHOR_MCP_PORT_DOC_WRITER:-9212}:${OCTOAUTHOR_MCP_PORT_DOC_WRITER:-9212}"
-      - "${OCTOAUTHOR_MCP_PORT_DOC_STORE:-9213}:${OCTOAUTHOR_MCP_PORT_DOC_STORE:-9213}"
-      - "${OCTOAUTHOR_MCP_PORT_VISUAL_QA:-9214}:${OCTOAUTHOR_MCP_PORT_VISUAL_QA:-9214}"
-      - "${OCTOAUTHOR_MCP_PORT_APP_INSPECTOR:-9215}:${OCTOAUTHOR_MCP_PORT_APP_INSPECTOR:-9215}"
 
     # --- Environment ---
     # Most settings come from .env via env_file above.

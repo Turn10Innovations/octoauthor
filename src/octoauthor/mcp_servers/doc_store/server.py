@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+from typing import Any
 
 from mcp.server.fastmcp import FastMCP
 
@@ -11,7 +12,10 @@ from octoauthor.mcp_servers.doc_store.config import DocStoreConfig
 from octoauthor.mcp_servers.doc_store.storage import DocStorage
 
 
-def create_doc_store_server(config: DocStoreConfig | None = None) -> FastMCP:
+def create_doc_store_server(
+    config: DocStoreConfig | None = None,
+    **mcp_kwargs: Any,
+) -> FastMCP:
     """Create and configure the doc-store MCP server."""
     if config is None:
         config = DocStoreConfig()
@@ -25,6 +29,7 @@ def create_doc_store_server(config: DocStoreConfig | None = None) -> FastMCP:
     mcp = FastMCP(
         name="doc-store-server",
         instructions="Document storage server. Store, retrieve, list, and delete documentation files and screenshots.",
+        **mcp_kwargs,
     )
 
     @mcp.tool()

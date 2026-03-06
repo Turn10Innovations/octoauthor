@@ -16,7 +16,10 @@ from octoauthor.mcp_servers.screenshot.browser import BrowserSession
 from octoauthor.mcp_servers.screenshot.config import ScreenshotConfig
 
 
-def create_screenshot_server(config: ScreenshotConfig | None = None) -> FastMCP:
+def create_screenshot_server(
+    config: ScreenshotConfig | None = None,
+    **mcp_kwargs: Any,
+) -> FastMCP:
     """Create and configure the screenshot MCP server."""
     if config is None:
         config = ScreenshotConfig()
@@ -35,6 +38,7 @@ def create_screenshot_server(config: ScreenshotConfig | None = None) -> FastMCP:
         name="screenshot-server",
         instructions="Browser screenshot capture server. Navigate to URLs and capture screenshots.",
         lifespan=lifespan,
+        **mcp_kwargs,
     )
 
     @mcp.tool()

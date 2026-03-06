@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+from typing import Any
 
 from mcp.server.fastmcp import FastMCP
 
@@ -10,7 +11,10 @@ from octoauthor.mcp_servers.visual_qa import tools as tool_impl
 from octoauthor.mcp_servers.visual_qa.config import VisualQAConfig
 
 
-def create_visual_qa_server(config: VisualQAConfig | None = None) -> FastMCP:
+def create_visual_qa_server(
+    config: VisualQAConfig | None = None,
+    **mcp_kwargs: Any,
+) -> FastMCP:
     """Create and configure the visual-qa MCP server."""
     if config is None:
         config = VisualQAConfig()
@@ -18,6 +22,7 @@ def create_visual_qa_server(config: VisualQAConfig | None = None) -> FastMCP:
     mcp = FastMCP(
         name="visual-qa-server",
         instructions="Visual QA server. Validates screenshots, compares images, scans for PII, checks annotations.",
+        **mcp_kwargs,
     )
 
     @mcp.tool()

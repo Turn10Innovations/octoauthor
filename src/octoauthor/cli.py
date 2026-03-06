@@ -42,7 +42,7 @@ def serve(
         return
 
     if server == "all":
-        _serve_all(host)
+        _serve_all(host, port)
         return
 
     if server == "api":
@@ -67,7 +67,7 @@ def serve(
     console.print(f"Starting [bold]{server}[/bold] on {host}:{effective_port}...")
     mcp_server.settings.host = host
     mcp_server.settings.port = effective_port
-    mcp_server.run(transport="sse")
+    mcp_server.run(transport="streamable-http")
 
 
 @app.command()
@@ -300,67 +300,26 @@ def validate(
         raise typer.Exit(1)
 
 
-def _serve_all(host: str) -> None:
-    """Launch all MCP servers + discovery API in parallel processes."""
-    import signal
-    import sys
-    from multiprocessing import Process
+def _serve_all(host: str, port: int = 0) -> None:
+    """Launch unified server with all MCP servers + discovery API in one process."""
+    import uvicorn
 
     from octoauthor.core.config import get_settings
+    from octoauthor.mcp_servers.registry import MOUNT_SLUGS, SERVER_NAMES
+    from octoauthor.service import create_unified_app
 
     settings = get_settings()
-    processes: list[Process] = []
+    effective_port = port if port > 0 else settings.api_port
 
-    def _run_api() -> None:
-        import uvicorn
+    console.print(f"\n[bold]OctoAuthor unified server[/bold] on {host}:{effective_port}")
+    console.print("  [green]discovery API[/green]  → /api/v1/discover")
+    console.print("  [green]health[/green]          → /health")
+    for name in SERVER_NAMES:
+        slug = MOUNT_SLUGS[name]
+        console.print(f"  [green]{name}[/green]  → /mcp/{slug}")
+    console.print()
 
-        from octoauthor.service import create_app
-
-        uvicorn.run(create_app(), host=host, port=settings.api_port, log_level="info")
-
-    def _run_mcp(name: str, port: int) -> None:
-        from octoauthor.mcp_servers.registry import create_server
-
-        srv = create_server(name)
-        srv.settings.host = host
-        srv.settings.port = port
-        srv.run(transport="sse")
-
-    # Start API server
-    api_proc = Process(target=_run_api, name="api", daemon=True)
-    api_proc.start()
-    processes.append(api_proc)
-    console.print(f"  [green]api[/green] on {host}:{settings.api_port}")
-
-    # Start MCP servers
-    from octoauthor.mcp_servers.registry import get_server_ports
-
-    for name, port in get_server_ports().items():
-        proc = Process(target=_run_mcp, args=(name, port), name=name, daemon=True)
-        proc.start()
-        processes.append(proc)
-        console.print(f"  [green]{name}[/green] on {host}:{port}")
-
-    console.print(f"\n[bold]All {len(processes)} services started.[/bold] Press Ctrl+C to stop.")
-
-    def _shutdown(signum: int, frame: object) -> None:
-        console.print("\n[yellow]Shutting down...[/yellow]")
-        for p in processes:
-            p.terminate()
-        for p in processes:
-            p.join(timeout=5)
-        sys.exit(0)
-
-    signal.signal(signal.SIGINT, _shutdown)
-    signal.signal(signal.SIGTERM, _shutdown)
-
-    # Wait for any process to exit (indicates failure)
-    while True:
-        for p in processes:
-            p.join(timeout=1)
-            if not p.is_alive() and p.exitcode is not None and p.exitcode != 0:
-                console.print(f"[red]{p.name} exited with code {p.exitcode}[/red]")
-                _shutdown(0, None)
+    uvicorn.run(create_unified_app(), host=host, port=effective_port, log_level="info")
 
 
 if __name__ == "__main__":
