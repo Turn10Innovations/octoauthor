@@ -58,7 +58,7 @@ class OctoAuthorSettings(BaseSettings):
     # GitHub integration
     github_token: str | None = Field(default=None, description="GitHub PAT for PR operations")
     github_branch_prefix: str = Field(
-        default="openclaw/doc-update",
+        default="octoauthor/doc-update",
         description="Prefix for auto-created branches",
     )
 
@@ -67,6 +67,13 @@ class OctoAuthorSettings(BaseSettings):
         default=None,
         description="Base URL of the target application (e.g., http://localhost:3000)",
     )
+    target_host: str | None = Field(
+        default=None,
+        description=(
+            "Rewrite 'localhost' in target URLs to this host. "
+            "Set to 'host.docker.internal' in Docker to reach host-network apps."
+        ),
+    )
     code_source_type: str = Field(
         default="local",
         description="Code source: 'local' (filesystem) or 'github' (API)",
@@ -74,6 +81,14 @@ class OctoAuthorSettings(BaseSettings):
     code_source_path: str = Field(
         default=".",
         description="Local path or 'owner/repo' for GitHub source",
+    )
+    code_github_ref: str = Field(
+        default="main",
+        description="Git ref (branch/tag/sha) for GitHub code source",
+    )
+    target_ports: str = Field(
+        default="",
+        description="Comma-separated ports to forward via socat in Docker",
     )
 
     # Ports — configurable to avoid conflicts with other services

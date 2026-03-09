@@ -209,13 +209,20 @@ def get_tree_local(config: CodeReaderConfig, path: str = ".", depth: int = 3) ->
 # ── GitHub API backend ──
 
 
+def _normalize_gh_path(path: str) -> str:
+    """Normalize path for GitHub API — strip leading/trailing slashes, handle '.' as root."""
+    if path in (".", "/", ""):
+        return ""
+    return path.strip("/")
+
+
 async def list_files_github(config: CodeReaderConfig, github_token: str, path: str = ".") -> dict[str, Any]:
     """List files via GitHub Contents API."""
     repo = config.code_source_path
     ref = config.code_github_ref
-    api_path = "" if path == "." else path
+    api_path = _normalize_gh_path(path)
 
-    async with httpx.AsyncClient() as client:
+    async with httpx.AsyncClient(follow_redirects=True) as client:
         resp = await client.get(
             f"https://api.github.com/repos/{repo}/contents/{api_path}",
             params={"ref": ref},
@@ -247,7 +254,7 @@ async def read_file_github(config: CodeReaderConfig, github_token: str, path: st
     repo = config.code_source_path
     ref = config.code_github_ref
 
-    async with httpx.AsyncClient() as client:
+    async with httpx.AsyncClient(follow_redirects=True) as client:
         resp = await client.get(
             f"https://api.github.com/repos/{repo}/contents/{path}",
             params={"ref": ref},
@@ -275,6 +282,157 @@ async def read_file_github(config: CodeReaderConfig, github_token: str, path: st
     }
 
 
+async def get_tree_github(
+    config: CodeReaderConfig, github_token: str, path: str = ".", depth: int = 3
+) -> dict[str, Any]:
+    """Get directory tree via GitHub Git Trees API (recursive)."""
+    repo = config.code_source_path
+    ref = config.code_github_ref
+
+    async with httpx.AsyncClient(follow_redirects=True) as client:
+        resp = await client.get(
+            f"https://api.github.com/repos/{repo}/git/trees/{ref}",
+            params={"recursive": "1"},
+            headers={
+                "Authorization": f"Bearer {github_token}",
+                "Accept": "application/vnd.github.v3+json",
+            },
+        )
+        if resp.status_code == 404:
+            return {"error": f"Ref not found: {ref}"}
+        resp.raise_for_status()
+
+    data = resp.json()
+    all_items = data.get("tree", [])
+
+    # Filter to path prefix and build nested structure
+    prefix = "" if path == "." else path.rstrip("/") + "/"
+
+    def _build(items: list[dict[str, Any]], current_prefix: str, current_depth: int) -> list[dict[str, Any]]:
+        if current_depth > depth:
+            return []
+
+        # Group direct children at this level
+        seen: dict[str, list[dict[str, Any]]] = {}
+        entries: list[dict[str, Any]] = []
+
+        for item in items:
+            item_path: str = item["path"]
+            if current_prefix and not item_path.startswith(current_prefix):
+                continue
+
+            relative = item_path[len(current_prefix):]
+            if "/" in relative:
+                dir_name = relative.split("/")[0]
+                if dir_name not in _SKIP_DIRS and not dir_name.startswith("."):
+                    if dir_name not in seen:
+                        seen[dir_name] = []
+                    seen[dir_name].append(item)
+            elif relative and item["type"] in ("blob", "tree"):
+                if relative not in _SKIP_DIRS:
+                    entries.append({
+                        "name": relative,
+                        "type": "directory" if item["type"] == "tree" else "file",
+                    })
+
+        for dir_name in sorted(seen):
+            children = _build(items, current_prefix + dir_name + "/", current_depth + 1)
+            entries.append({"name": dir_name, "type": "directory", "children": children})
+
+        return sorted(entries, key=lambda e: (e["type"] != "directory", e["name"]))
+
+    tree = _build(all_items, prefix, 1)
+    return {"path": path, "tree": tree, "total_entries": len(all_items)}
+
+
+async def build_feature_map_local(
+    config: CodeReaderConfig, app_name: str, entry_dir: str = "src", max_depth: int = 3
+) -> dict[str, Any]:
+    """Build feature map from local filesystem source code."""
+    from octoauthor.mcp_servers.code_reader.react_parser import build_feature_map
+
+    async def read_fn(path: str) -> str:
+        result = read_file_local(config, path)
+        if "error" in result:
+            raise FileNotFoundError(result["error"])
+        return result["content"]
+
+    async def search_fn(pattern: str, path: str = ".", glob: str = "*") -> list[dict[str, Any]]:
+        result = search_code_local(config, pattern, path, glob)
+        return result.get("matches", [])
+
+    async def list_fn(path: str = ".", pattern: str = "*") -> list[str]:
+        root = _resolve_local(config)
+        target = (root / path).resolve()
+        if not str(target).startswith(str(root)) or not target.exists():
+            return []
+        paths: list[str] = []
+        for file_path in sorted(target.rglob("*")):
+            if any(skip in file_path.parts for skip in _SKIP_DIRS):
+                continue
+            if not file_path.is_file():
+                continue
+            if pattern != "*" and not fnmatch.fnmatch(file_path.name, pattern):
+                # Support brace expansion like "*.{tsx,ts,jsx,js}"
+                if "{" in pattern:
+                    base, _, rest = pattern.partition("{")
+                    exts = rest.rstrip("}").split(",")
+                    if not any(fnmatch.fnmatch(file_path.name, base + e) for e in exts):
+                        continue
+                else:
+                    continue
+            paths.append(str(file_path.relative_to(root)))
+        return paths
+
+    feature_map = await build_feature_map(read_fn, search_fn, list_fn, app_name, entry_dir, max_depth)
+    return feature_map.model_dump()
+
+
+async def build_feature_map_github(
+    config: CodeReaderConfig, github_token: str, app_name: str,
+    entry_dir: str = "src", max_depth: int = 3,
+) -> dict[str, Any]:
+    """Build feature map from GitHub repository source code."""
+    from octoauthor.mcp_servers.code_reader.react_parser import build_feature_map
+
+    async def read_fn(path: str) -> str:
+        result = await read_file_github(config, github_token, path)
+        if "error" in result:
+            raise FileNotFoundError(result["error"])
+        return result["content"]
+
+    async def search_fn(pattern: str, path: str = ".", glob: str = "*") -> list[dict[str, Any]]:
+        result = await search_code_github(config, github_token, pattern, glob)
+        return result.get("matches", [])
+
+    async def list_fn(path: str = ".", pattern: str = "*") -> list[str]:
+        # Use the tree API to get a full recursive listing, then filter
+        tree_result = await get_tree_github(config, github_token, path, depth=10)
+        if "error" in tree_result:
+            return []
+        all_paths: list[str] = []
+
+        def _collect(nodes: list[dict[str, Any]], prefix: str = "") -> None:
+            for node in nodes:
+                node_path = f"{prefix}{node['name']}" if prefix else node["name"]
+                if node.get("type") == "file":
+                    if pattern == "*" or fnmatch.fnmatch(node["name"], pattern):
+                        all_paths.append(node_path)
+                    elif "{" in pattern:
+                        base, _, rest = pattern.partition("{")
+                        exts = rest.rstrip("}").split(",")
+                        if any(fnmatch.fnmatch(node["name"], base + e) for e in exts):
+                            all_paths.append(node_path)
+                if node.get("children"):
+                    _collect(node["children"], node_path + "/")
+
+        _collect(tree_result.get("tree", []))
+        return all_paths
+
+    feature_map = await build_feature_map(read_fn, search_fn, list_fn, app_name, entry_dir, max_depth)
+    return feature_map.model_dump()
+
+
 async def search_code_github(
     config: CodeReaderConfig, github_token: str, query: str, file_pattern: str = "*"
 ) -> dict[str, Any]:
@@ -287,7 +445,7 @@ async def search_code_github(
         if ext:
             q += f" extension:{ext}"
 
-    async with httpx.AsyncClient() as client:
+    async with httpx.AsyncClient(follow_redirects=True) as client:
         resp = await client.get(
             "https://api.github.com/search/code",
             params={"q": q, "per_page": 50},

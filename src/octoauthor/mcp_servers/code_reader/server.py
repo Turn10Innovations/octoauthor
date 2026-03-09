@@ -77,14 +77,57 @@ def create_code_reader_server(
         return json.dumps(result)
 
     @mcp.tool()
-    def get_tree(path: str = ".", depth: int = 3) -> str:
+    async def get_tree(path: str = ".", depth: int = 3) -> str:
         """Get the directory tree structure of the project.
 
         Args:
             path: Starting directory (default: repo root)
             depth: Maximum depth to traverse (default: 3, max: 6)
         """
-        result = tool_impl.get_tree_local(config, path, depth)
+        if config.code_source_type == "github":
+            result = await tool_impl.get_tree_github(config, _get_github_token(), path, depth)
+        else:
+            result = tool_impl.get_tree_local(config, path, depth)
+        return json.dumps(result)
+
+    @mcp.tool()
+    async def build_feature_map(
+        entry_dir: str = "src",
+        max_depth: int = 3,
+    ) -> str:
+        """Analyze application source code to build a complete feature map.
+
+        Statically analyzes React/TypeScript source code to discover all routes,
+        pages, components, modals, forms, and API endpoints. Each feature is
+        classified as 'view' (safe to navigate), 'interact' (safe to click/open),
+        or 'mutate' (needs sandbox mode). The output serves as a documentation
+        checklist and provides mock route specs for sandbox captures.
+
+        Args:
+            entry_dir: Directory containing frontend source (default: "src")
+            max_depth: Max component tree depth to trace (default: 3, max: 5)
+        """
+        max_depth = min(max_depth, 5)
+
+        # Derive app name from config source path
+        source_path = config.code_source_path
+        if config.code_source_type == "github":
+            # "owner/repo" -> "repo"
+            app_name = source_path.split("/")[-1] if "/" in source_path else source_path
+        else:
+            # Local path -> directory name
+            from pathlib import Path
+
+            app_name = Path(source_path).resolve().name
+
+        if config.code_source_type == "github":
+            result = await tool_impl.build_feature_map_github(
+                config, _get_github_token(), app_name, entry_dir, max_depth
+            )
+        else:
+            result = await tool_impl.build_feature_map_local(
+                config, app_name, entry_dir, max_depth
+            )
         return json.dumps(result)
 
     return mcp

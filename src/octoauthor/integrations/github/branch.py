@@ -16,7 +16,7 @@ async def create_branch(
     repo: str,
     *,
     base_branch: str = "main",
-    prefix: str = "openclaw/doc-update",
+    prefix: str = "octoauthor/doc-update",
 ) -> str:
     """Create a new branch from the base branch.
 
@@ -65,7 +65,7 @@ async def delete_branch(
 async def list_branches(
     client: GitHubAPIClient,
     repo: str,
-    prefix: str = "openclaw/",
+    prefix: str = "octoauthor/",
 ) -> list[str]:
     """List branches matching a prefix."""
     resp = await client.get(f"/repos/{repo}/branches", params={"per_page": 100})

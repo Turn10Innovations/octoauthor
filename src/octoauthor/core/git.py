@@ -26,7 +26,7 @@ _API_BASE = "https://api.github.com"
 class GitOps:
     """Git + GitHub operations for the doc pipeline."""
 
-    def __init__(self, repo: str, token: str, branch_prefix: str = "openclaw/doc-update") -> None:
+    def __init__(self, repo: str, token: str, branch_prefix: str = "octoauthor/doc-update") -> None:
         self.repo = repo  # e.g. "Turn10Innovations/octoauthor-test"
         self.token = token
         self.branch_prefix = branch_prefix
@@ -39,7 +39,7 @@ class GitOps:
         self.work_dir: Path | None = None
 
     def generate_branch_name(self) -> str:
-        """Generate a unique branch name: openclaw/doc-update-2026-03-05-a1b2c3."""
+        """Generate a unique branch name: octoauthor/doc-update-2026-03-05-a1b2c3."""
         now = datetime.now(tz=UTC)
         date_str = now.strftime("%Y-%m-%d")
         hash_str = hashlib.sha256(now.isoformat().encode()).hexdigest()[:6]
@@ -69,7 +69,7 @@ class GitOps:
         return self.work_dir
 
     def create_branch(self) -> None:
-        """Create and checkout the openclaw branch."""
+        """Create and checkout the octoauthor doc branch."""
         if not self.work_dir:
             msg = "Must clone first"
             raise RuntimeError(msg)
@@ -82,7 +82,12 @@ class GitOps:
         )
         logger.info("Branch created", extra={"branch": self.branch_name})
 
-    def commit_docs(self, doc_dir: Path, message: str | None = None) -> int:
+    def commit_docs(
+        self,
+        doc_dir: Path,
+        message: str | None = None,
+        screenshot_dir: Path | None = None,
+    ) -> int:
         """Copy generated docs into the work tree and commit.
 
         Returns the number of files committed.
@@ -103,12 +108,19 @@ class GitOps:
             (dest / md_file.name).write_bytes(md_file.read_bytes())
             file_count += 1
 
-        # Copy asset files
+        # Copy asset files from doc_dir/assets
         src_assets = doc_dir / "assets"
         if src_assets.exists():
             for asset in src_assets.iterdir():
                 if asset.is_file():
                     (assets_dest / asset.name).write_bytes(asset.read_bytes())
+                    file_count += 1
+
+        # Copy screenshots from the separate screenshot output dir
+        if screenshot_dir and screenshot_dir.exists() and screenshot_dir != src_assets:
+            for ss_file in screenshot_dir.iterdir():
+                if ss_file.is_file() and ss_file.suffix.lower() in {".png", ".jpg", ".jpeg", ".webp"}:
+                    (assets_dest / ss_file.name).write_bytes(ss_file.read_bytes())
                     file_count += 1
 
         # Stage and commit
@@ -143,7 +155,12 @@ class GitOps:
         )
         logger.info("Branch pushed", extra={"branch": self.branch_name})
 
-    async def create_pr(self, title: str | None = None, body: str | None = None) -> str:
+    async def create_pr(
+        self,
+        title: str | None = None,
+        body: str | None = None,
+        base_branch: str = "main",
+    ) -> str:
         """Create a PR on GitHub. Returns the PR URL."""
         pr_title = title or f"docs: auto-generated user guides ({self.branch_name})"
         pr_body = body or (
@@ -168,7 +185,7 @@ class GitOps:
                     "title": pr_title,
                     "body": pr_body,
                     "head": self.branch_name,
-                    "base": "main",
+                    "base": base_branch,
                 },
             )
             resp.raise_for_status()

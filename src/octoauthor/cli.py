@@ -205,9 +205,11 @@ def audit(
 @app.command()
 def auth(
     target: str = typer.Option(..., help="Base URL of the target app to log into"),
+    target_id: str = typer.Option("", help="Target ID in OctoAuthor (pushes auth to running server)"),
+    server: str = typer.Option("http://localhost:9210", help="OctoAuthor server URL"),
     output: str = typer.Option(".octoauthor/auth/storage-state.json", help="Where to save the session state"),
 ) -> None:
-    """Open a browser for manual login, then save the session state for automated runs."""
+    """Open a browser for manual login, capture session, and push to OctoAuthor."""
     import asyncio
 
     async def _capture_session() -> None:
@@ -228,13 +230,53 @@ def auth(
         out_path = PathObj(output)
         out_path.parent.mkdir(parents=True, exist_ok=True)
         await context.storage_state(path=str(out_path))
+        state_json = out_path.read_text()
         await browser.close()
         await pw.stop()
         console.print(f"Session saved to [green]{output}[/green]")
-        console.print("\nAdd this to your config:")
-        console.print(f"  auth:\n    strategy: storage_state\n    storage_state_path: {output}")
+
+        # Push to OctoAuthor server if target_id is provided
+        if target_id:
+            await _push_auth_to_server(server, target_id, state_json)
 
     asyncio.run(_capture_session())
+
+
+async def _push_auth_to_server(server_url: str, target_id: str, state_json: str) -> None:
+    """Push captured auth state to the running OctoAuthor server."""
+    import httpx
+
+    from octoauthor.core.config import get_settings
+
+    api_key = get_settings().api_key or ""
+    headers: dict[str, str] = {"Content-Type": "application/json"}
+    if api_key:
+        headers["X-API-Key"] = api_key
+
+    async with httpx.AsyncClient() as client:
+        # Ensure target exists, create if not
+        resp = await client.get(f"{server_url}/api/v1/targets", headers=headers)
+        if resp.status_code == 200:
+            targets = resp.json()
+            if not any(t["id"] == target_id for t in targets):
+                console.print(f"  Target [bold]{target_id}[/bold] not found, creating...")
+                await client.post(
+                    f"{server_url}/api/v1/targets",
+                    headers=headers,
+                    json={"id": target_id, "label": target_id, "url": ""},
+                )
+
+        # Push auth state
+        resp = await client.post(
+            f"{server_url}/api/v1/targets/{target_id}/auth",
+            headers=headers,
+            json={"state_json": state_json},
+        )
+        if resp.status_code == 200:
+            console.print(f"  [green]Auth pushed to OctoAuthor target:[/green] {target_id}")
+        else:
+            error = resp.json().get("error", resp.text)
+            console.print(f"  [red]Failed to push auth:[/red] {error}")
 
 
 @app.command()

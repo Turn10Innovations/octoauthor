@@ -1,23 +1,34 @@
 # OctoAuthor Playbook: Orchestrator (Master Pipeline)
-# This is the top-level playbook. Any orchestrator (Claude Code, OpenClaw, etc.)
-# reads this to understand the full end-to-end documentation workflow.
+#
+# This is the concrete, step-by-step instruction manual for any LLM orchestrator
+# (Claude Code, OpenClaw, etc.) to produce comprehensive user documentation.
 #
 # The orchestrator does NOT need GitHub tokens, file access, or app URLs.
 # Everything is done through OctoAuthor's MCP tools.
+#
+# IMPORTANT: This playbook is OPINIONATED. Follow it exactly. The output quality
+# depends on completing every step — especially Phase 1 (code analysis).
 
 name: orchestrator
 display_name: Orchestrator
 description: |
-  End-to-end documentation pipeline: explore the target app's source code,
-  navigate the running application, capture screenshots, generate docs,
-  validate quality, and deliver via pull request.
+  End-to-end documentation pipeline: deeply analyze source code, systematically
+  navigate every user journey in the running app, capture step-by-step screenshots,
+  generate task-based guides, validate quality, and deliver via pull request.
 
 role: |
-  You are a documentation orchestrator. You coordinate the full pipeline
-  from source code analysis to delivered pull request. You use OctoAuthor's
-  MCP tools for everything — you never access files, URLs, or GitHub directly.
+  You are a documentation orchestrator. You produce COMPREHENSIVE user documentation
+  by deeply understanding the application from its source code, then systematically
+  walking every user journey and capturing screenshots at each meaningful step.
 
-  Your workflow has 5 phases. Execute them in order.
+  You are NOT a shallow screenshot-taker. You are a subject matter expert who:
+  1. Reads the codebase to understand every feature, route, component, and workflow
+  2. Maps out every user journey (not just top-level pages)
+  3. Clicks into sub-pages, opens modals, fills forms, follows links
+  4. Generates TASK-BASED guides ("How to generate a Financial Package") not
+     page-based summaries ("The Reports page")
+
+  Your workflow has 5 phases. Execute them in order. DO NOT skip Phase 1.
 
 requires:
   capabilities: [text]
@@ -33,155 +44,415 @@ requires:
     - doc-standard.yaml
     - tag-schema.yaml
 
-# ── Phase 1: Understand the Application ──────────────────────────────────────
+# ═══════════════════════════════════════════════════════════════════════════════
+# PHASE 1: DEEP CODE ANALYSIS (MOST IMPORTANT — DO NOT SKIP)
+# ═══════════════════════════════════════════════════════════════════════════════
+#
+# Before capturing a single screenshot, you MUST understand the entire application.
+# This phase produces a "documentation plan" — the list of guides to write and
+# the user journeys to capture for each one.
 
 phase_1_explore:
-  name: Explore Source Code
+  name: Deep Code Analysis
   description: |
-    Before touching the running app, understand what you're documenting.
-    Read the source code to build a mental model of the application.
+    Read the source code to build a complete mental model of the application.
+    The output of this phase is a DOCUMENTATION PLAN: a list of every guide
+    you will write, with the user journeys and screenshots needed for each.
   tools: [code-reader-server]
+
   steps:
+    # ── Step 1.1: Get the lay of the land ──────────────────────────────────
     - action: get_tree
-      why: "Get the project structure to understand the codebase layout"
+      why: "Understand project structure — frontend vs backend, pages, components"
       params: { path: ".", depth: 3 }
+      what_to_look_for:
+        - Frontend framework (React, Vue, Svelte, Angular)
+        - Page/view files (pages/, views/, routes/)
+        - Component directories (components/, ui/)
+        - Backend API routes (api/, routes/, controllers/)
+        - Existing documentation (docs/, README)
+        - Configuration files (config, .env.example)
 
+    # ── Step 1.2: Find and read the router ─────────────────────────────────
     - action: search_code
-      why: "Find route definitions to know what pages exist"
-      params: { query: "router", file_pattern: "*.tsx" }
+      why: "Find the routing configuration to discover ALL pages"
+      params:
+        query: "Route"
+        file_pattern: "*.tsx"
       alternatives:
-        - { query: "@router", file_pattern: "*.py" }    # FastAPI/Flask
-        - { query: "path:", file_pattern: "*.yaml" }      # Config-based routing
-        - { query: "Route", file_pattern: "*.tsx" }       # React Router
+        - { query: "createBrowserRouter", file_pattern: "*.tsx" }
+        - { query: "path:", file_pattern: "routes.ts" }
+        - { query: "@app.route", file_pattern: "*.py" }
+        - { query: "router.get", file_pattern: "*.ts" }
+      then: |
+        READ the router file completely. Extract EVERY route:
+        - Path (e.g., /reports, /settings/users)
+        - Component name (e.g., <Reports />, <UserManagement />)
+        - Auth/permission requirements
+        - Nested/child routes
+        - Dynamic routes (e.g., /reports/:id)
 
+    # ── Step 1.3: Read EVERY page component ────────────────────────────────
     - action: read_file
-      why: "Read route files to understand page structure and components"
-      note: "Read the files found in previous step"
+      why: "Understand what each page DOES, not just what it looks like"
+      note: |
+        For EACH page component found in the router, read the full source.
+        Extract:
+        - Page title and description (from headings, meta, or comments)
+        - Sub-sections/cards on the page (what can the user click into?)
+        - Links to sub-pages or modals (onClick handlers, <Link> elements)
+        - Forms and their fields
+        - Action buttons (Create, Run, Export, Generate, Configure, etc.)
+        - API calls (what data does this page fetch/submit?)
+        - Conditional rendering (what shows based on permissions, state?)
+        - Error/empty states
 
+    # ── Step 1.4: Follow the component tree ────────────────────────────────
+    - action: read_file
+      why: "Trace imported components to find modals, forms, dialogs, sub-views"
+      note: |
+        For each page component, look at its imports:
+        - Modal/Dialog components → these are user interactions to document
+        - Form components → these have fields to capture
+        - Sub-page components → these are deeper views to navigate to
+        - Card/tile components → these link to features
+        Read at least 2 levels deep from each page component.
+
+    # ── Step 1.5: Read backend API routes ──────────────────────────────────
     - action: search_code
-      why: "Find form components, CRUD operations, and key UI elements"
-      params: { query: "form", file_pattern: "*.tsx" }
+      why: "Understand what operations the user can perform (CRUD, exports, etc.)"
+      params: { query: "router", file_pattern: "*.py" }
+      note: |
+        Read API route files to understand:
+        - What data entities exist (companies, users, reports, etc.)
+        - CRUD operations (create, read, update, delete)
+        - Special operations (export, generate, sync, run)
+        - Permission requirements per endpoint
+
+    # ── Step 1.6: Read existing documentation ──────────────────────────────
+    - action: list_files
+      why: "Check for existing docs, README, CHANGELOG to understand features"
+      params: { path: "docs" }
+      note: "Also read README.md and any CHANGELOG or feature docs"
+
+    # ── Step 1.7: Build the Feature Map ───────────────────────────────────
+    - action: build_feature_map
+      tool: code-reader → build_feature_map
+      params: { entry_dir: "src", max_depth: 3 }
+      why: >
+        Produces a machine-readable feature inventory that serves as the
+        documentation plan backbone. Every route, modal, form, and API
+        action in the feature map MUST appear in at least one guide.
+      then: >
+        Save the feature map as your primary documentation checklist.
+        The classification tells you what needs sandbox mode:
+        - view: Normal capture_screenshot
+        - interact: Open the modal/drawer, capture, close
+        - mutate: Use capture_sandbox with mock_routes from the feature map
+
+        Count total features. Plan guides so that every feature is covered
+        (aim for 1 guide per route, with sub-sections for each modal/form).
+
+    # ── Step 1.8: Build the Documentation Plan ─────────────────────────────
+    - action: none
+      why: "Synthesize everything into a concrete plan before proceeding"
+      note: |
+        STOP. Before moving to Phase 2, write out your documentation plan:
+
+        For each guide you will create, specify:
+        1. Tag (kebab-case identifier)
+        2. Title (task-based: "How to..." or "Managing..." or "Generating...")
+        3. Category (admin, setup, features, reports, integrations)
+        4. Route(s) covered
+        5. User journey steps (the actual clicks/interactions to capture):
+           - Start URL
+           - Click X → screenshot
+           - Fill form Y → screenshot
+           - Click Z → screenshot
+           - Result page → screenshot
+        6. Prerequisites (other guides the user should read first)
+
+        RULES FOR THE PLAN:
+        - Every feature card, link, and action button you found in code
+          MUST appear in at least one guide
+        - Guides are TASK-BASED, not page-based
+        - If a page has 3 action cards (e.g., Reports has Corporate Dashboard,
+          Contract Waterfall, Financial Package), each gets its OWN guide
+        - Settings sub-pages (User Management, Global Settings, etc.)
+          each get their own guide
+        - The login/auth flow gets its own guide
+        - Include a "Getting Started / App Overview" guide as an intro
+        - Max 10 steps per guide — split into sub-guides if longer
 
   output: |
-    A mental model of: what routes exist, what each page does,
-    what forms and actions are available, and what the user workflow is.
+    A documentation plan listing every guide to write, with exact user journeys
+    and screenshot sequences for each. This plan drives Phase 2 and 3.
 
-# ── Phase 2: Navigate and Capture ────────────────────────────────────────────
+# ═══════════════════════════════════════════════════════════════════════════════
+# PHASE 2: SYSTEMATIC NAVIGATION AND CAPTURE
+# ═══════════════════════════════════════════════════════════════════════════════
+#
+# Execute each user journey from the documentation plan. For each journey,
+# capture screenshots at every meaningful step.
 
 phase_2_capture:
   name: Navigate and Capture
   description: |
-    Use the running app to capture screenshots and DOM analysis for each
-    route you identified in Phase 1.
+    For each guide in the documentation plan, walk the user journey and
+    capture screenshots at every meaningful interaction point.
   tools: [screenshot-server, app-inspector-server]
+
+  pre_requisites:
+    - action: capture_auth_state / import_auth_state
+      why: "Authenticate before capturing — most apps require login"
+      note: |
+        1. Call capture_auth_state with the app's login URL
+        2. If it returns a VNC URL (Docker/headless mode):
+           a. Present the VNC URL to the user
+           b. ASK the user to complete login and confirm when done
+           c. WAIT for user confirmation (this is orchestrator-specific:
+              Claude Code asks a question, Slack waits for a reply,
+              a web UI shows a "Continue" button, etc.)
+           d. Call finalize_auth_capture to save the session immediately
+        3. Also import_auth_state into app-inspector-server (it has its own browser)
+
+        IMPORTANT: finalize_auth_capture does NOT poll or auto-detect.
+        The orchestrator MUST pause for user confirmation before calling it.
+        This design works with ANY orchestrator that can interact with users.
+
+    - action: set_company_context
+      why: "Many apps require selecting a context (company, org, project)"
+      note: |
+        Use capture_flow or JavaScript evaluation to select the required context.
+        This is app-specific — check the code from Phase 1 to know what's needed.
+        Common patterns:
+        - sessionStorage/localStorage for SPA state
+        - API call to set server-side session
+        - URL parameter or cookie
+
   steps:
+    # ── For each guide in the documentation plan: ──────────────────────────
+
     - action: inspect_page
-      why: "Analyze the page DOM to discover forms, buttons, and navigation"
-      params: { url: "{target_base_url}/{route}" }
+      why: "Get the actual DOM to verify your code analysis was correct"
+      params: { url: "{start_url}", wait_for: "main" }
+      note: |
+        Compare the DOM with what you expected from the code. If there are
+        elements you didn't see in code, investigate. If expected elements
+        are missing, check permissions/state.
 
-    - action: capture_screenshot
-      why: "Capture the page in its default state"
-      params:
-        url: "{target_base_url}/{route}"
-        output_filename: "{tag}-list-01.png"
-
-    - action: capture_flow
-      why: "Capture multi-step interactions (create, edit, delete flows)"
-      params:
-        url: "{target_base_url}/{route}"
-        tag: "{tag}"
-        steps: "[ { action: click, selector: '.add-button' } ]"
+    - action: discover_actions
+      why: "Find all clickable elements to ensure nothing is missed"
+      params: { url: "{start_url}" }
 
     - action: discover_forms
-      why: "Get form field labels and types for documentation"
-      params: { url: "{target_base_url}/{route}" }
+      why: "Get exact form field labels and types"
+      params: { url: "{start_url}" }
+
+    - action: capture_screenshot
+      why: "Capture the page in its initial state"
+      params:
+        url: "{start_url}"
+        output_filename: "{tag}-01.png"
+        wait_for: "main"
+
+    - action: capture_flow
+      why: "Capture multi-step interactions within the page"
+      params:
+        url: "{start_url}"
+        tag: "{tag}"
+        steps: |
+          Derived from the user journey in the documentation plan.
+          Each step should be one of:
+          - { action: "click", selector: "button:has-text('Run')" }
+          - { action: "fill", selector: "input[name='search']", value: "test" }
+          - { action: "wait", selector: ".modal-content" }
+          - { action: "select", selector: "select#category", value: "reports" }
+
+          Capture a screenshot BETWEEN each meaningful state change:
+          - Before clicking → shows the button/action available
+          - After clicking → shows the result (modal, new page, loading state)
+          - After filling → shows the form with data
+          - After submitting → shows the confirmation/result
+
+    - action: capture_screenshot (sub-pages)
+      why: "Follow links/cards to their destination pages"
+      note: |
+        If a page has cards that link to sub-features (e.g., Reports page has
+        "View Dashboard", "View Waterfall", "Generate Package"), CLICK EACH ONE
+        and capture the resulting page. These are separate user journeys.
+
+  sandbox_capture: >
+    For features classified as 'mutate' in the feature map:
+    1. Get the mock_routes from feature_map.get_mock_routes()
+    2. Call capture_sandbox with:
+       - url: the page URL
+       - mock_routes: the API endpoint mocks for this feature
+       - steps: click to open modal, fill form fields, click submit
+       - wait_for: success indicator (toast, confirmation modal)
+    3. The API call is intercepted — no data changes
+    4. Capture shows the success UI for documentation
+
+  naming_convention: |
+    Screenshots follow this pattern: {tag}-{state}-{step}.png
+    Examples:
+      reports-overview-01.png         (Reports page initial state)
+      reports-corporate-dashboard-01.png  (After clicking View Dashboard)
+      reports-generate-package-01.png     (Package generation dialog)
+      settings-user-mgmt-list-01.png     (User Management list view)
+      settings-user-mgmt-edit-02.png     (Editing a user)
 
   output: |
-    Per-route capture data: screenshots, DOM snapshots, form fields,
-    and navigation elements.
+    Per-guide capture data: ordered list of screenshots with descriptions,
+    DOM snapshots, form field lists, and actual navigation element labels.
 
-# ── Phase 3: Generate Documentation ─────────────────────────────────────────
+# ═══════════════════════════════════════════════════════════════════════════════
+# PHASE 3: GENERATE DOCUMENTATION
+# ═══════════════════════════════════════════════════════════════════════════════
+#
+# For each guide in the plan, generate comprehensive step-by-step documentation.
+# The doc-writer receives RICH context — not just a DOM summary, but the full
+# understanding from Phase 1 + captured data from Phase 2.
 
 phase_3_write:
-  name: Generate Docs
+  name: Generate Documentation
   description: |
-    Use the captured data to generate step-by-step documentation guides.
-    Follow the doc-standard spec strictly.
+    Generate task-based documentation guides using the doc-writer.
+    Each guide must be informed by BOTH the code analysis AND the captured data.
   tools: [doc-writer-server, doc-store-server]
+
+  context_requirements: |
+    The generate_guide tool receives these inputs. ALL are important:
+
+    - tag: kebab-case identifier (from plan)
+    - title: TASK-BASED title ("How to Generate a Financial Package")
+    - route: primary route this guide covers
+    - version: app version
+    - applies_to: product name(s)
+    - category: admin/setup/features/reports/integrations/general
+
+    - screenshots: ordered list of screenshot filenames from Phase 2
+    - screenshot_descriptions: what each screenshot shows (CRITICAL for quality)
+      Include "STEP TEXT: Click **Generate Package**" prefix to control step text.
+
+    - dom_summary: Rich description including:
+      * What this feature does (from code analysis)
+      * What API operations happen behind the scenes
+      * What data the user is working with
+      * What the expected outcome is
+      * Error states and edge cases
+
+    - form_fields: exact field labels from discover_forms
+    - navigation_elements: exact button/link labels from discover_actions
+
   steps:
     - action: generate_guide
-      why: "Create the documentation guide from captured data"
-      params:
-        tag: "{tag}"
-        title: "How to {action} in {feature}"
-        route: "/{route}"
-        version: "{app_version}"
-        applies_to: ["{product_name}"]
-        screenshots: ["{tag}-list-01.png", "{tag}-create-02.png"]
-        dom_summary: "{from phase 2 inspect_page output}"
-        form_fields: ["{from phase 2 discover_forms output}"]
+      why: "Generate the documentation from captured data + code knowledge"
+      note: |
+        The dom_summary should be a RICH paragraph, not a bullet list of DOM elements.
+        Include context from code analysis:
+        BAD:  "Page has a button labeled Run and a card labeled Costpoint"
+        GOOD: "The Data Operations page allows users to trigger data synchronization
+               from their ERP system (Costpoint by Deltek) into OctoHub's data warehouse.
+               Clicking Run starts a background job that fetches the latest financial
+               data (trial balances, KPI reports, pool rates, PSR data, fringe summaries)
+               and updates the local data warehouse tables. The page shows all available
+               data applications filtered by ERP vendor. After a run completes, the
+               user can see results in the Export Data and Reports sections."
 
     - action: validate_content
-      why: "Check the generated guide passes all doc-standard rules"
-      params: { content_markdown: "{generated guide}" }
+      why: "Ensure the guide passes all doc-standard rules"
+      params: { content_markdown: "{generated content}" }
+      on_failure: |
+        If validation fails, call rewrite_section to fix specific issues,
+        then validate again. Do not store invalid content.
 
     - action: store_doc
-      why: "Persist the validated guide"
-      params:
-        tag: "{tag}"
-        title: "{title}"
-        content_markdown: "{validated content}"
-
-    - action: store_screenshot
-      why: "Persist screenshots alongside the guide"
-      params:
-        tag: "{tag}"
-        filename: "{tag}-list-01.png"
-        data_base64: "{base64 screenshot data}"
+      why: "Persist the validated guide to the doc store"
 
   output: |
-    Complete documentation guides stored via doc-store, validated
-    against the documentation standard.
+    Complete, validated documentation guides stored in the doc store.
+    Each guide is task-based, references screenshots, and is informed
+    by deep code understanding.
 
-# ── Phase 4: Quality Assurance ───────────────────────────────────────────────
+# ═══════════════════════════════════════════════════════════════════════════════
+# PHASE 4: QUALITY ASSURANCE
+# ═══════════════════════════════════════════════════════════════════════════════
 
 phase_4_qa:
   name: Quality Assurance
   description: |
-    Validate screenshots and review generated docs for quality.
-  tools: [visual-qa-server, doc-store-server]
+    Validate every screenshot and scan for PII. Review the complete doc set
+    for coverage gaps.
+  tools: [visual-qa-server, doc-store-server, code-reader-server]
+
   steps:
     - action: validate_screenshot
-      why: "Check dimensions, file size, format"
+      why: "Check dimensions, file size, format for every screenshot"
       params: { path: "{screenshot_path}" }
 
     - action: scan_pii_visual
-      why: "Ensure no PII is visible in screenshots"
+      why: "Ensure no real user data, API keys, or passwords in screenshots"
       params: { path: "{screenshot_path}" }
+      note: "Run this on EVERY screenshot. Block the PR if PII is found."
 
-    - action: check_annotations
-      why: "Verify annotation consistency"
-      params: { path: "{screenshot_path}" }
+    - action: coverage_audit
+      why: "Verify the doc set covers the entire application"
+      note: |
+        Cross-reference the documentation plan from Phase 1 with stored docs:
+        1. Call list_docs to get all stored guides
+        2. Compare against the routes and features found in code
+        3. Identify gaps: features with no guide, routes with no screenshots
+        4. If gaps exist, go back to Phase 2/3 to fill them
+
+        Coverage checklist:
+        - Every page route has at least one guide
+        - Every action button/card found in code is documented
+        - Every form is documented with its fields
+        - Settings sub-pages are individually documented
+        - Auth/login flow is documented
+        - Error states and empty states are mentioned
+
+    - action: feature_map_coverage_check
+      why: "Cross-reference the feature map against generated documentation"
+      note: |
+        Cross-reference the feature map against the generated documentation:
+        1. List all routes in the feature map
+        2. For each route, verify there's a guide covering it
+        3. For each interact/mutate feature, verify it's documented with a screenshot
+        4. Flag any features missing from documentation as coverage gaps
+        5. If coverage < 90%, generate additional guides for missing features
 
   output: |
-    QA report with pass/fail per screenshot and per doc.
-    If anything fails, go back to Phase 2 or 3 to fix.
+    QA report with pass/fail per screenshot and coverage analysis.
+    If anything fails, loop back to fix before delivering.
 
-# ── Phase 5: Deliver ─────────────────────────────────────────────────────────
+# ═══════════════════════════════════════════════════════════════════════════════
+# PHASE 5: DELIVER
+# ═══════════════════════════════════════════════════════════════════════════════
 
 phase_5_deliver:
   name: Create Pull Request
   description: |
-    Push generated docs to a GitHub repo via PR.
+    Push all generated docs and screenshots to GitHub via PR.
   tools: [git-ops-server]
+
   steps:
     - action: setup_branch
-      why: "Clone the target repo and create a documentation branch"
-      params: { repo: "{owner/repo}" }
+      why: "Clone target repo and create documentation branch"
+      params:
+        repo: "{owner/repo}"
+        base_branch: "{default_branch}"  # Usually 'main' or 'master'
 
     - action: commit_docs
-      why: "Commit all generated docs and screenshots"
-      params: { repo: "{owner/repo}" }
+      why: "Commit all guides, screenshots, and manifest"
+      params:
+        repo: "{owner/repo}"
+        message: |
+          docs: comprehensive user documentation ({guide_count} guides, {screenshot_count} screenshots)
+
+          Generated by OctoAuthor. Covers:
+          {list of guide titles}
 
     - action: push
       why: "Push the branch to GitHub"
@@ -191,21 +462,51 @@ phase_5_deliver:
       why: "Open a PR for human review"
       params:
         repo: "{owner/repo}"
-        title: "docs: auto-generated user guides"
+        base_branch: "{default_branch}"
+        title: "docs: comprehensive user documentation"
+        body: |
+          Include:
+          - Summary of all guides generated
+          - Screenshot count
+          - Coverage analysis from Phase 4
+          - QA results (all screenshots passed validation, PII scan clean)
+          - Review checklist
 
   output: |
-    A pull request URL. The PR contains all generated docs and screenshots,
-    ready for human review.
+    A pull request URL containing the complete documentation set.
 
-# ── Constraints ──────────────────────────────────────────────────────────────
+# ═══════════════════════════════════════════════════════════════════════════════
+# CONSTRAINTS
+# ═══════════════════════════════════════════════════════════════════════════════
 
 constraints:
-  - MUST read doc-standard.yaml before generating any content
+  # Code analysis
+  - MUST complete Phase 1 before taking any screenshots
+  - MUST read the router and every page component before building the plan
+  - MUST follow imported components to find modals, forms, and sub-views
+
+  # Capture quality
   - MUST capture in light mode only
-  - MUST use demo/seed data (never capture real user data)
+  - MUST authenticate and set app context (company/org) before capturing
+  - MUST click into sub-pages, modals, and cards — not just top-level pages
+  - MUST capture forms in both empty and filled states where relevant
+  - MUST capture result/confirmation states after actions
+
+  # Documentation quality
+  - MUST read doc-standard.yaml before generating any content
+  - Guides are TASK-BASED ("How to...") not page-based ("The X page")
   - Every screenshot MUST be referenced in a step (no orphans)
   - Every guide MUST pass validate_content before storing
+  - Max 10 steps per guide — split into sub-guides if longer
+  - dom_summary MUST include context from code analysis, not just DOM elements
+
+  # Security
   - Every screenshot MUST pass validate_screenshot and scan_pii_visual
-  - Max 10 steps per guide — split into sub-guides if more
-  - NEVER hardcode URLs — use the target_base_url from configuration
-  - NEVER access files or GitHub directly — always use MCP tools
+  - MUST use demo/seed data (never capture real user data)
+  - NEVER hardcode URLs — use configuration
+
+  # Completeness
+  - Every feature found in code MUST appear in at least one guide
+  - Every action button and form MUST be documented
+  - The documentation set MUST have a "Getting Started" overview guide
+  - Settings/admin sub-pages MUST each have their own guide

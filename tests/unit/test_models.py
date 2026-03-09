@@ -175,7 +175,7 @@ class TestAgentModels:
         report = AuditReport(
             run_id="audit-1",
             pr_number=42,
-            branch="openclaw/test",
+            branch="octoauthor/test",
             model_used="claude-sonnet-4-6",
             findings=[critical_finding],
             verdict="blocked",

@@ -9,7 +9,7 @@ from octoauthor.mcp_servers.git_ops.server import create_git_ops_server
 class TestGitOpsConfig:
     def test_defaults(self) -> None:
         config = GitOpsConfig()
-        assert config.github_branch_prefix == "openclaw/doc-update"
+        assert config.github_branch_prefix == "octoauthor/doc-update"
 
 
 class TestGitOpsServer:

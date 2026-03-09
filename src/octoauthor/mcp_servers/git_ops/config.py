@@ -15,6 +15,6 @@ class GitOpsConfig(BaseSettings):
     )
 
     github_branch_prefix: str = Field(
-        default="openclaw/doc-update",
+        default="octoauthor/doc-update",
         description="Prefix for auto-created branches",
     )

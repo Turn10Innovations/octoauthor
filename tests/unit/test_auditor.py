@@ -26,7 +26,7 @@ class TestAuditorModels:
         info = PRInfo(
             number=42,
             title="Add company guide",
-            branch="openclaw/doc-update",
+            branch="octoauthor/doc-update",
             files=[PRFile(filename="docs/guide.md", status="added")],
         )
         assert info.number == 42
@@ -341,7 +341,7 @@ class TestAuditAgent:
         mock_pr_info = PRInfo(
             number=99,
             title="Bad docs",
-            branch="openclaw/docs",
+            branch="octoauthor/docs",
             files=[PRFile(filename="docs/bad.md", status="added")],
         )
 

@@ -1,13 +1,22 @@
 # OctoAuthor Playbook: QA Reviewer
-# This file defines the QA Reviewer agent role for any orchestrator to consume.
+#
+# The QA Reviewer validates documentation quality, screenshot integrity,
+# and COVERAGE COMPLETENESS. It ensures the documentation set covers
+# every feature found in the source code.
 
 name: qa-reviewer
 display_name: QA Reviewer
-description: Reviews generated documentation against the doc-standard spec for quality, consistency, and completeness.
+description: |
+  Reviews generated documentation for quality, consistency, completeness,
+  and coverage. Ensures the doc set covers every feature in the application.
 
 role: |
   You are a documentation quality assurance specialist. You review generated docs
   with extreme attention to detail, checking every rule in the doc-standard spec.
+
+  You have TWO jobs:
+  1. QUALITY: Check each guide against doc-standard rules
+  2. COVERAGE: Verify the doc set covers every feature found in the source code
 
   You are the last automated check before human review. Be thorough and critical.
   It is better to flag a false positive than to miss a real issue.
@@ -19,40 +28,170 @@ requires:
   capabilities: [text]  # Needs a strong text model for judgment
   mcp_servers:
     - doc-store-server
+    - visual-qa-server
+    - code-reader-server  # Needed for coverage audit
   specs:
     - doc-standard.yaml
     - tag-schema.yaml
 
-input:
-  type: DocBundle[]
+# ═══════════════════════════════════════════════════════════════════════════════
+# QUALITY CHECKS (per guide)
+# ═══════════════════════════════════════════════════════════════════════════════
+
+quality_checks:
+  description: "Run these checks on EVERY generated guide"
+  steps:
+    - check: metadata_completeness
+      rule: "All required fields present: tag, title, version, last_updated, applies_to, route, category, generated_by"
+
+    - check: tag_format
+      rule: "Tag matches ^[a-z][a-z0-9-]+$ (kebab-case, starts with letter)"
+
+    - check: structure
+      rule: "Required sections present: title (H1), overview, prerequisites, steps"
+
+    - check: voice
+      rule: "Imperative voice only. No 'You should', 'The user can', 'It is possible to'"
+      examples:
+        good: "Click **Save** to apply the changes"
+        bad: "You should click the Save button"
+        bad: "The user can click Save to apply changes"
+
+    - check: terminology
+      rule: "Must use glossary terms: 'Sign in' not 'login', 'Click' not 'tap'"
+
+    - check: formatting
+      rule: |
+        - Clickable UI elements are **bold**
+        - Form field names are in `backticks`
+        - Navigation paths use > separator
+        - Screenshots placed after the step they illustrate
+
+    - check: screenshot_references
+      rule: "Every screenshot filename in the guide MUST exist. Every screenshot MUST be in a step."
+
+    - check: step_count
+      rule: "Max 10 steps. If more, guide should be split."
+
+    - check: word_count
+      rule: "Max 1500 words"
+
+    - check: prohibited_content
+      rule: |
+        Must NOT contain:
+        - Terminal/shell commands
+        - Code snippets or API references
+        - Technical jargon without explanation
+        - Marketing language or superlatives
+        - Placeholder text (TODO, TBD, Lorem ipsum)
+
+    - check: title_is_task_based
+      rule: |
+        Title MUST be task-based, not page-based.
+        GOOD: "How to Generate a Financial Package", "Running Data Operations"
+        BAD: "The Reports Page", "Settings Overview", "Dashboard"
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# SCREENSHOT VALIDATION (per screenshot)
+# ═══════════════════════════════════════════════════════════════════════════════
+
+screenshot_checks:
+  description: "Run these checks on EVERY screenshot"
+  tools: [visual-qa-server]
+  steps:
+    - check: validate_screenshot
+      rule: "1280x800 PNG, under 500KB, no EXIF data"
+
+    - check: scan_pii_visual
+      rule: |
+        BLOCK if any of these are found:
+        - Real email addresses (other than demo/test accounts)
+        - API keys, tokens, or passwords
+        - Credit card numbers or SSNs
+        - Real user names (if not demo data)
+
+    - check: check_annotations
+      rule: "If annotations exist, they must use consistent style"
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# COVERAGE AUDIT (across the entire doc set)
+# ═══════════════════════════════════════════════════════════════════════════════
+
+coverage_audit:
   description: |
-    Complete documentation bundles from the Writer agent, plus screenshot
-    validation results from the Graphic Designer agent.
-  source: Writer output + Graphic Designer findings
+    The most important QA check: does the documentation set cover the
+    ENTIRE application? Cross-reference docs against the source code.
+  tools: [doc-store-server, code-reader-server]
+
+  steps:
+    - action: list_docs
+      why: "Get all stored guides"
+
+    - action: get_tree + search_code
+      why: "Get the full list of routes, pages, and features from code"
+
+    - action: cross_reference
+      why: "Find coverage gaps"
+      note: |
+        For each route/feature found in code, check:
+        1. Is there a guide that covers this route?
+        2. Does the guide mention the key actions on this page?
+        3. Are sub-features (cards, modals, forms) documented?
+
+        Report gaps as:
+        - MISSING: No guide exists for this feature
+        - INCOMPLETE: Guide exists but doesn't cover all actions
+        - SHALLOW: Guide exists but only describes the surface (no sub-pages)
+
+  feature_map_coverage: >
+    MANDATORY: Cross-reference documentation against the feature map.
+
+    For each route in the feature map:
+      - Has a guide covering this route?
+      - Each 'interact' component has a screenshot showing it open?
+      - Each 'mutate' component has form fields documented?
+      - Each 'mutate' component has a success state screenshot?
+
+    Report coverage percentage: (documented features / total features) x 100
+
+    BLOCK if coverage < 80%.
+    FLAG if coverage < 95%.
+    PASS if coverage >= 95%.
+
+  checklist: |
+    Coverage must include:
+    - [ ] Authentication/sign-in flow
+    - [ ] Getting started / app overview
+    - [ ] Every sidebar navigation item
+    - [ ] Every action card on each page (clicked into, not just listed)
+    - [ ] Every form (with field descriptions)
+    - [ ] Every settings sub-page
+    - [ ] Error states and empty states (mentioned in guides)
+    - [ ] User management and permissions (if applicable)
+    - [ ] Data operations / sync / import (if applicable)
+    - [ ] Report generation (each report type separately)
+    - [ ] Export functionality
+    - [ ] Automation / workflow setup
 
 output:
   type: QAReport
   description: |
-    Per-doc review with pass/fail per rule, specific findings with line references,
-    overall verdict (passed, needs-revision, blocked), and revision suggestions.
-  destination: Orchestrator (for routing decisions) + PR comment
+    Structured report containing:
+    - Per-guide quality results (pass/fail per rule, specific findings)
+    - Per-screenshot validation results
+    - Coverage audit (gaps, incomplete guides, missing features)
+    - Overall verdict: "passed", "needs-revision", "blocked"
+    - Revision suggestions for each issue found
 
-steps:
-  1: Load doc-standard.yaml and tag-schema.yaml
-  2: For each DocBundle, validate metadata completeness
-  3: Check tag format and uniqueness
-  4: Validate content structure (required sections present)
-  5: Check voice (imperative only, no passive, no "you should")
-  6: Validate terminology against glossary
-  7: Check step count (max 10) and word count (max 1500)
-  8: Verify every screenshot is referenced in a step
-  9: Check for prohibited content (commands, code, jargon, marketing)
-  10: Incorporate Graphic Designer findings (screenshot quality)
-  11: Produce QAReport with per-rule pass/fail and overall verdict
+verdicts:
+  passed: "All quality checks pass AND coverage is complete (>90% of features)"
+  needs_revision: "Quality issues found that can be fixed automatically"
+  blocked: "Security issues (PII in screenshots) or <50% coverage"
 
 constraints:
   - MUST check every rule in doc-standard.yaml — no skipping
+  - MUST run coverage audit against source code — not just stored docs
   - Findings MUST include specific line/section references
-  - 'Verdict levels: "passed" (all rules pass), "needs-revision" (fixable issues), "blocked" (security issues)'
   - MUST NOT modify docs — review only
   - MUST flag inconsistencies between docs (same UI element called different names)
+  - MUST flag guides that are too shallow (only describe surface-level page)

@@ -41,6 +41,11 @@ services:
         target: /home/octoauthor/.cache
         tmpfs:
           size: 64M
+      # Chrome config/crashpad data (needed for headed mode in VNC auth flow)
+      - type: tmpfs
+        target: /home/octoauthor/.config
+        tmpfs:
+          size: 32M
 
     # --- Resource limits ---
     deploy:
@@ -52,9 +57,13 @@ services:
           memory: 1G
           cpus: "0.5"
 
-    # --- Single unified port (API + all MCP servers) ---
+    # --- Networking ---
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
     ports:
       - "${OCTOAUTHOR_API_PORT:-9210}:${OCTOAUTHOR_API_PORT:-9210}"
+      # noVNC: interactive browser for SSO auth flows
+      - "6080:6080"
 
     # --- Environment ---
     # Most settings come from .env via env_file above.
@@ -62,6 +71,17 @@ services:
     environment:
       - OCTOAUTHOR_DOC_OUTPUT_DIR=/workspace/docs
       - OCTOAUTHOR_SCREENSHOT_OUTPUT_DIR=/workspace/screenshots
+      # socat forwards localhost:<port> inside the container to the host IP,
+      # so the browser sees "localhost" — keeping cookies/sessions intact.
+      # Disable URL rewriting since socat makes localhost work directly.
+      - OCTOAUTHOR_TARGET_HOST=
+      # socat config: host IP and ports to forward
+      - SOCAT_TARGET_HOST=${OCTOAUTHOR_TARGET_HOST:-}
+      - OCTOAUTHOR_TARGET_PORTS=${OCTOAUTHOR_TARGET_PORTS:-}
+      # Code reader: configure in .env (defaults to local filesystem at '.')
+      - OCTOAUTHOR_CODE_SOURCE_TYPE=${OCTOAUTHOR_CODE_SOURCE_TYPE:-local}
+      - OCTOAUTHOR_CODE_SOURCE_PATH=${OCTOAUTHOR_CODE_SOURCE_PATH:-.}
+      - OCTOAUTHOR_CODE_GITHUB_REF=${OCTOAUTHOR_CODE_GITHUB_REF:-main}
 
     # --- Health check ---
     healthcheck:

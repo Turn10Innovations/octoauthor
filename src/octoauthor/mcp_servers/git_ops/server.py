@@ -52,7 +52,7 @@ def create_git_ops_server(
         """Clone a repo (sparse) and create a documentation branch.
 
         This must be called before commit_docs or push. Creates a unique
-        branch name like 'openclaw/doc-update-2026-03-06-a1b2c3'.
+        branch name like 'octoauthor/doc-update-2026-03-06-a1b2c3'.
 
         Args:
             repo: GitHub repository (e.g., 'owner/repo-name')
@@ -93,8 +93,12 @@ def create_git_ops_server(
         if not git.work_dir:
             return json.dumps({"error": "Must call setup_branch first"})
 
-        doc_dir = get_settings().doc_output_dir
-        file_count = git.commit_docs(doc_dir, message)
+        settings = get_settings()
+        file_count = git.commit_docs(
+            settings.doc_output_dir,
+            message,
+            screenshot_dir=settings.screenshot_output_dir,
+        )
         return json.dumps({
             "status": "ok",
             "files_committed": file_count,
@@ -124,6 +128,7 @@ def create_git_ops_server(
         repo: str,
         title: str | None = None,
         body: str | None = None,
+        base_branch: str = "main",
     ) -> str:
         """Create a pull request on GitHub with the committed documentation.
 
@@ -131,12 +136,13 @@ def create_git_ops_server(
             repo: GitHub repository (must match a previous setup_branch call)
             title: PR title (auto-generated if not provided)
             body: PR body/description (auto-generated if not provided)
+            base_branch: Target branch for the PR (default: 'main')
         """
         git = _get_git_ops(repo)
         if not git.work_dir:
             return json.dumps({"error": "Must call setup_branch first"})
 
-        pr_url = await git.create_pr(title, body)
+        pr_url = await git.create_pr(title, body, base_branch=base_branch)
         return json.dumps({
             "status": "ok",
             "pr_url": pr_url,

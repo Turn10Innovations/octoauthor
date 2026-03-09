@@ -8,6 +8,7 @@ from typing import TYPE_CHECKING, Any
 from octoauthor.core.logging import get_logger
 from octoauthor.mcp_servers.screenshot.capture import capture_page
 from octoauthor.mcp_servers.screenshot.models import InteractionStep
+from octoauthor.mcp_servers.screenshot.sandbox import MockRoute, SandboxSession
 
 if TYPE_CHECKING:
     from octoauthor.mcp_servers.screenshot.browser import BrowserSession
@@ -92,3 +93,75 @@ async def capture_flow(
         await page.close()
 
     return {"screenshots": screenshots, "errors": errors}
+
+
+async def capture_sandbox(
+    session: BrowserSession,
+    config: ScreenshotConfig,
+    url: str,
+    output_filename: str,
+    mock_routes: list[dict[str, Any]],
+    steps: list[dict[str, str]] | None = None,
+    wait_for: str | None = None,
+    full_page: bool = False,
+) -> dict[str, Any]:
+    """Capture a screenshot with API interception (sandbox mode).
+
+    Navigates to the URL with all mutating API calls intercepted.
+    Non-GET requests matching a mock_route get a mock response;
+    unmatched mutating requests are blocked with 403.
+    """
+    parsed_mocks = [MockRoute(**m) for m in mock_routes]
+    sandbox = SandboxSession(parsed_mocks)
+
+    page = await session.new_page()
+    try:
+        await sandbox.enable(page)
+
+        await page.goto(url, timeout=config.navigation_timeout_ms, wait_until="networkidle")
+
+        # Execute interaction steps if provided
+        if steps:
+            for step_data in steps:
+                interaction = InteractionStep(**step_data)
+                try:
+                    await _perform_interaction(page, interaction)
+                    await page.wait_for_timeout(500)
+                except Exception as e:
+                    logger.error(
+                        "Sandbox interaction failed",
+                        exc_info=True,
+                        extra={"action": interaction.action, "selector": interaction.selector},
+                    )
+                    return {
+                        "error": f"Interaction failed ({interaction.action} {interaction.selector}): {e}",
+                        "interception_log": _build_interception_log(sandbox),
+                    }
+
+        # Wait for selector if specified
+        if wait_for:
+            await page.wait_for_selector(wait_for, timeout=config.navigation_timeout_ms)
+
+        # Capture screenshot
+        output_path = Path(config.screenshot_output_dir) / output_filename
+        result = await capture_page(page, output_path, config, full_page=full_page)
+
+        await sandbox.disable(page)
+
+        return {
+            **result.model_dump(),
+            "interception_log": _build_interception_log(sandbox),
+        }
+    finally:
+        await page.close()
+
+
+def _build_interception_log(sandbox: SandboxSession) -> dict[str, Any]:
+    """Build a summary of sandbox interception activity."""
+    return {
+        "total": len(sandbox.intercepted),
+        "mocked": len(sandbox.mocked_requests),
+        "blocked": len(sandbox.blocked_requests),
+        "mocked_urls": [r.url for r in sandbox.mocked_requests],
+        "blocked_urls": [r.url for r in sandbox.blocked_requests],
+    }

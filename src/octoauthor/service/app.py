@@ -11,6 +11,13 @@ if TYPE_CHECKING:
     from collections.abc import AsyncIterator
 from starlette.routing import Mount, Route
 
+from octoauthor.service.config_ui import (
+    add_target,
+    config_page,
+    import_target_auth,
+    list_targets,
+    remove_target,
+)
 from octoauthor.service.middleware import APIKeyMiddleware
 from octoauthor.service.routes import discover, get_playbook, get_spec, health
 
@@ -25,8 +32,7 @@ def create_app() -> Starlette:
     ]
 
     app = Starlette(routes=routes)
-    app.add_middleware(APIKeyMiddleware)
-    return app
+    return APIKeyMiddleware(app)
 
 
 def create_unified_app() -> Starlette:
@@ -36,26 +42,18 @@ def create_unified_app() -> Starlette:
     Bearer auth is handled by the MCP SDK via OctoAuthorTokenVerifier.
     Sub-app lifespans (session managers) are started via the outer app's lifespan.
     """
-    from octoauthor.core.config import get_settings
     from octoauthor.core.logging import get_logger
     from octoauthor.mcp_servers.registry import MOUNT_SLUGS, SERVER_NAMES, create_server
-    from octoauthor.service.auth import OctoAuthorTokenVerifier, build_auth_kwargs
 
     logger = get_logger(__name__)
-    settings = get_settings()
-
-    token_verifier = OctoAuthorTokenVerifier(
-        api_key=settings.api_key,
-        auditor_api_key=settings.auditor_api_key,
-    )
-    auth_kwargs = build_auth_kwargs(token_verifier)
 
     # Build MCP servers and sub-app mounts
+    # Auth is handled by APIKeyMiddleware (Bearer tokens for /mcp/* paths)
     mcp_mounts: list[Mount] = []
     mcp_servers: list[object] = []
     for name in SERVER_NAMES:
         slug = MOUNT_SLUGS[name]
-        server = create_server(name, **auth_kwargs)
+        server = create_server(name)
         sub_app = server.streamable_http_app()
         mcp_mounts.append(Mount(f"/mcp/{slug}", app=sub_app))
         mcp_servers.append(server)
@@ -69,15 +67,19 @@ def create_unified_app() -> Starlette:
                 await stack.enter_async_context(server.session_manager.run())
             yield
 
-    # Combine API routes + MCP mounts
+    # Combine API routes + config UI + MCP mounts
     routes = [
+        Route("/", config_page, methods=["GET"]),
         Route("/health", health, methods=["GET"]),
         Route("/api/v1/discover", discover, methods=["GET"]),
         Route("/api/v1/playbooks/{name}", get_playbook, methods=["GET"]),
         Route("/api/v1/specs/{name}", get_spec, methods=["GET"]),
+        Route("/api/v1/targets", list_targets, methods=["GET"]),
+        Route("/api/v1/targets", add_target, methods=["POST"]),
+        Route("/api/v1/targets/{target_id}", remove_target, methods=["DELETE"]),
+        Route("/api/v1/targets/{target_id}/auth", import_target_auth, methods=["POST"]),
         *mcp_mounts,
     ]
 
     app = Starlette(routes=routes, lifespan=lifespan)
-    app.add_middleware(APIKeyMiddleware)
-    return app
+    return APIKeyMiddleware(app)

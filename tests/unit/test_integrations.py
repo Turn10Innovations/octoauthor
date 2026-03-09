@@ -73,7 +73,7 @@ class TestGitHubBranch:
 
         branch = await create_branch(client, "owner/repo", base_branch="main")
 
-        assert branch.startswith("openclaw/doc-update-")
+        assert branch.startswith("octoauthor/doc-update-")
         client.get.assert_called_once()
         client.post.assert_called_once()
 
@@ -84,8 +84,8 @@ class TestGitHubBranch:
         client = AsyncMock(spec=GitHubAPIClient)
         resp = MagicMock()
         resp.json.return_value = [
-            {"name": "openclaw/doc-update-20260305-abc"},
-            {"name": "openclaw/doc-update-20260304-def"},
+            {"name": "octoauthor/doc-update-20260305-abc"},
+            {"name": "octoauthor/doc-update-20260304-def"},
             {"name": "feature/new-thing"},
             {"name": "main"},
         ]
@@ -94,7 +94,7 @@ class TestGitHubBranch:
         branches = await list_branches(client, "owner/repo")
 
         assert len(branches) == 2
-        assert all(b.startswith("openclaw/") for b in branches)
+        assert all(b.startswith("octoauthor/") for b in branches)
 
 
 class TestGitHubPR:
@@ -113,7 +113,7 @@ class TestGitHubPR:
         result = await create_pr(
             client,
             "owner/repo",
-            branch="openclaw/doc-update-123",
+            branch="octoauthor/doc-update-123",
             title="Add company guide",
             labels=["documentation"],
         )

@@ -335,5 +335,5 @@ uv run octoauthor run --config config.yaml --target ./my-app
 - Main branch: `master` (protected, requires PR + review)
 - Development branch: `dev`
 - Feature branches: `feature/{name}`
-- OpenClaw branches: `openclaw/doc-update-{date}-{hash}` (auto-created, limited access)
+- OpenClaw branches: `octoauthor/doc-update-{date}-{hash}` (auto-created, limited access)
 - Use conventional commit messages

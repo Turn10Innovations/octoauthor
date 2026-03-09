@@ -1,5 +1,5 @@
 # OctoAuthor Documentation Audit Pipeline
-# Runs on PRs from openclaw/* branches
+# Runs on PRs from octoauthor/* branches
 # Implements Gate 1 (static analysis) and triggers Gate 2 (auditor agent)
 
 name: Documentation Audit
@@ -96,7 +96,7 @@ jobs:
     name: "Gate 2: AI Security Audit"
     runs-on: ubuntu-latest
     needs: static-analysis
-    if: startsWith(github.head_ref, 'openclaw/')
+    if: startsWith(github.head_ref, 'octoauthor/')
     steps:
       - uses: actions/checkout@v4
 

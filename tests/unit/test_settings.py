@@ -54,7 +54,7 @@ class TestOctoAuthorSettings:
 
     def test_github_settings(self) -> None:
         settings = _clean_settings()
-        assert settings.github_branch_prefix == "openclaw/doc-update"
+        assert settings.github_branch_prefix == "octoauthor/doc-update"
 
     def test_port_defaults(self) -> None:
         settings = _clean_settings()

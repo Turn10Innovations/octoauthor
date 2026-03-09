@@ -172,7 +172,7 @@ OctoAuthor uses autonomous AI agents to generate user documentation. This docume
 ### OpenClaw GitHub Token (Fine-Grained PAT)
 
 **Permissions (minimum required):**
-- Contents: Read/Write (scoped to `openclaw/*` branches only)
+- Contents: Read/Write (scoped to `octoauthor/*` branches only)
 - Pull Requests: Read/Write (create PRs only)
 - **NO** admin access
 - **NO** branch protection bypass

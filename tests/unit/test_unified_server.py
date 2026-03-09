@@ -72,13 +72,14 @@ class TestOctoAuthorTokenVerifier:
 
 
 @pytest.fixture
-def unified_client() -> TestClient:
+def unified_client():  # type: ignore[no-untyped-def]
     """Create a test client from the unified app with no API key required."""
     with patch.dict(os.environ, {"OCTOAUTHOR_API_KEY": "", "OCTOAUTHOR_AUDITOR_API_KEY": ""}, clear=False):
         from octoauthor.service.app import create_unified_app
 
         app = create_unified_app()
-        return TestClient(app)
+        with TestClient(app) as client:
+            yield client
 
 
 class TestUnifiedApp:
@@ -125,9 +126,9 @@ class TestUnifiedApp:
 # --- Middleware bypass tests ---
 
 
-class TestMiddlewareMCPBypass:
-    def test_mcp_paths_skip_api_key_middleware(self) -> None:
-        """MCP paths should not be blocked by X-API-Key middleware."""
+class TestMiddlewareAuth:
+    def test_mcp_paths_use_bearer_not_api_key(self) -> None:
+        """MCP paths require Bearer token, not X-API-Key."""
         with patch.dict(
             os.environ,
             {"OCTOAUTHOR_API_KEY": "test-key", "OCTOAUTHOR_AUDITOR_API_KEY": ""},
@@ -136,22 +137,38 @@ class TestMiddlewareMCPBypass:
             from octoauthor.service.app import create_unified_app
 
             app = create_unified_app()
-            client = TestClient(app)
+            with TestClient(app) as client:
+                # API endpoint SHOULD require X-API-Key
+                resp = client.get("/api/v1/discover")
+                assert resp.status_code == 401
 
-            # API endpoint SHOULD require X-API-Key
-            resp = client.get("/api/v1/discover")
-            assert resp.status_code == 401
+                # MCP endpoint without Bearer token should be rejected
+                resp = client.post("/mcp/doc-store/mcp", json={
+                    "jsonrpc": "2.0",
+                    "id": 1,
+                    "method": "initialize",
+                    "params": {
+                        "protocolVersion": "2025-03-26",
+                        "capabilities": {},
+                        "clientInfo": {"name": "test", "version": "0.1.0"},
+                    },
+                })
+                assert resp.status_code == 401
+                assert "Bearer" in resp.json()["error"]
 
-            # MCP endpoint should NOT be blocked by X-API-Key middleware
-            # (it uses its own Bearer auth via TokenVerifier)
-            resp = client.post("/mcp/doc-store/mcp", json={
-                "jsonrpc": "2.0",
-                "id": 1,
-                "method": "initialize",
-                "params": {
-                    "protocolVersion": "2025-03-26",
-                    "capabilities": {},
-                    "clientInfo": {"name": "test", "version": "0.1.0"},
-                },
-            })
-            assert resp.status_code != 401 or "Missing X-API-Key" not in resp.text
+                # MCP endpoint WITH valid Bearer token should pass through
+                resp = client.post(
+                    "/mcp/doc-store/mcp",
+                    json={
+                        "jsonrpc": "2.0",
+                        "id": 1,
+                        "method": "initialize",
+                        "params": {
+                            "protocolVersion": "2025-03-26",
+                            "capabilities": {},
+                            "clientInfo": {"name": "test", "version": "0.1.0"},
+                        },
+                    },
+                    headers={"Authorization": "Bearer test-key"},
+                )
+                assert resp.status_code != 401
