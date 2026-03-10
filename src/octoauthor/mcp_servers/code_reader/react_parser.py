@@ -52,7 +52,7 @@ _RE_LAZY_IMPORT = re.compile(
 
 # Routes
 _RE_CREATE_BROWSER_ROUTER = re.compile(
-    r"createBrowserRouter\s*\(\s*\[", re.DOTALL
+    r"createBrowserRouter\s*\(", re.DOTALL
 )
 _RE_ROUTE_OBJECT_PATH = re.compile(
     r"""path\s*:\s*['"](?P<path>[^'"]+)['"]"""
@@ -66,16 +66,98 @@ _RE_ROUTE_OBJECT_COMPONENT = re.compile(
 _RE_ROUTE_OBJECT_LAZY = re.compile(
     r"""lazy\s*:\s*\(\)\s*=>\s*import\(\s*['"](?P<path>[^'"]+)['"]\s*\)"""
 )
-_RE_JSX_ROUTE = re.compile(
-    r"""<Route\s[^>]*path\s*=\s*['"{](?P<path>[^'"{}]+)['"}][^>]*"""
-    r"""element\s*=\s*\{?\s*<\s*(?P<comp>\w+)""",
-    re.DOTALL,
-)
-_RE_JSX_ROUTE_ALT = re.compile(
-    r"""<Route\s[^>]*element\s*=\s*\{?\s*<\s*(?P<comp>\w+)[^>]*"""
-    r"""path\s*=\s*['"{](?P<path>[^'"{}]+)['"}]""",
-    re.DOTALL,
-)
+
+# Wrapper / layout components to skip when looking for the actual page component
+_WRAPPER_COMPONENTS = {
+    "ProtectedRoute", "Suspense", "LoadingSpinner", "Navigate",
+    "Outlet", "ErrorBoundary", "RouteErrorBoundary",
+}
+
+# Layout components that wrap child routes (contain <Outlet />)
+_LAYOUT_INDICATORS = {"Outlet"}
+
+# Extract all JSX component tags from an element expression
+_RE_JSX_COMPONENT = re.compile(r"<\s*(?P<comp>[A-Z]\w*)")
+
+# Find <Route start tags
+_RE_ROUTE_TAG_START = re.compile(r"<Route\s")
+
+
+def _extract_brace_content(text: str, start: int) -> str | None:
+    """Extract content between balanced { } starting at position of opening brace."""
+    if start >= len(text) or text[start] != "{":
+        return None
+    depth = 0
+    for i in range(start, len(text)):
+        if text[i] == "{":
+            depth += 1
+        elif text[i] == "}":
+            depth -= 1
+            if depth == 0:
+                return text[start + 1 : i]
+    return None
+
+
+def _parse_jsx_route_tag(content: str, tag_start: int) -> dict[str, str | None] | None:
+    """Parse a <Route ...> or <Route ... /> tag starting at tag_start.
+
+    Returns dict with keys: path (str|None), is_index (bool), element_expr (str|None).
+    """
+    # Find the end of this Route tag (either /> or >)
+    # We need to handle nested { } within attributes
+    pos = tag_start
+    depth = 0
+    tag_end = None
+    while pos < len(content):
+        ch = content[pos]
+        if ch == "{":
+            depth += 1
+        elif ch == "}":
+            depth -= 1
+        elif depth == 0:
+            if ch == ">" and pos > 0 and content[pos - 1] == "/":
+                tag_end = pos + 1
+                break
+            if ch == ">":
+                tag_end = pos + 1
+                break
+        pos += 1
+    if tag_end is None:
+        return None
+
+    tag_text = content[tag_start:tag_end]
+
+    # Extract path attribute
+    path_m = re.search(r"""path\s*=\s*['"](?P<path>[^'"]+)['"]""", tag_text)
+    path = path_m.group("path") if path_m else None
+    is_index = bool(re.search(r"\bindex\b", tag_text)) and path is None
+
+    # Extract element expression using brace counting
+    elem_m = re.search(r"element\s*=\s*\{", tag_text)
+    element_expr: str | None = None
+    if elem_m:
+        # Find the { in the original content (not the substring)
+        brace_pos = tag_start + elem_m.end() - 1
+        element_expr = _extract_brace_content(content, brace_pos)
+
+    return {"path": path, "is_index": is_index, "element_expr": element_expr}
+
+
+def _extract_page_component(element_expr: str) -> str | None:
+    """Extract the actual page component from a JSX element expression.
+
+    Given something like:
+        <ProtectedRoute><Suspense fallback={<LoadingSpinner />}><DataWarehouse /></Suspense></ProtectedRoute>
+    Returns "DataWarehouse" by filtering out known wrapper components.
+    """
+    components = [m.group("comp") for m in _RE_JSX_COMPONENT.finditer(element_expr)]
+    # Filter out wrappers and pick the last non-wrapper (innermost page component)
+    page_components = [c for c in components if c not in _WRAPPER_COMPONENTS]
+    if page_components:
+        # Return the last one — in nested JSX, the actual page component
+        # appears after wrappers: <Wrapper><Suspense><PageComp /></Suspense></Wrapper>
+        return page_components[-1]
+    return None
 
 # Modal / dialog patterns
 _RE_MODAL_STATE = re.compile(
@@ -153,6 +235,16 @@ _MUTATING_METHODS = {"POST", "PUT", "PATCH", "DELETE"}
 # ---------------------------------------------------------------------------
 
 
+_RE_BLOCK_COMMENT = re.compile(r"/\*.*?\*/", re.DOTALL)
+_RE_LINE_COMMENT = re.compile(r"//[^\n]*")
+
+
+def _strip_comments(content: str) -> str:
+    """Strip block and line comments from source code."""
+    content = _RE_BLOCK_COMMENT.sub("", content)
+    return _RE_LINE_COMMENT.sub("", content)
+
+
 def _extract_attr(attrs_str: str, attr_name: str) -> str | None:
     """Extract an attribute value from a JSX attribute string."""
     for m in _RE_ATTR.finditer(attrs_str):
@@ -209,7 +301,7 @@ async def detect_framework(file_listing: list[str], read_fn: ReadFn) -> str:
     """Detect the frontend framework from package.json."""
     pkg_path: str | None = None
     for f in file_listing:
-        if f.endswith("package.json") and f.count("/") <= 1:
+        if f.endswith("package.json") and "node_modules" not in f:
             pkg_path = f
             break
 
@@ -240,18 +332,19 @@ async def resolve_import_path(
     importing_file: str,
     import_path: str,
     file_listing: list[str],
+    entry_dir: str = "src",
 ) -> str | None:
     """Resolve a relative or alias import to an actual file path.
 
     Handles:
       ./Foo  -> Foo.tsx, Foo.ts, Foo/index.tsx, etc.
       ../components/Bar -> relative resolution
-      @/components/Bar  -> assumes @/ maps to src/
+      @/components/Bar  -> assumes @/ maps to entry_dir
     """
     if import_path.startswith("@/"):
-        base_dir = "src"
+        # @/ alias maps to the entry_dir (e.g., frontend/src)
         rel_segment = import_path[2:]
-        candidate_base = os.path.join(base_dir, rel_segment)
+        candidate_base = os.path.join(entry_dir, rel_segment)
     elif import_path.startswith("."):
         dir_of_importer = os.path.dirname(importing_file)
         candidate_base = os.path.normpath(os.path.join(dir_of_importer, import_path))
@@ -321,7 +414,11 @@ async def extract_routes(
             warnings.append(f"Could not read route file {route_file}: {exc}")
             continue
 
+        # Parse imports from original content (imports are never in comments)
         imports = _parse_imports(content)
+        # Strip comments before extracting routes to avoid JSDoc examples
+        content = _strip_comments(content)
+
         import_map: dict[str, str] = {}  # component_name -> import source
         for imp in imports:
             for name in imp["names"]:
@@ -329,13 +426,10 @@ async def extract_routes(
 
         # --- createBrowserRouter object-style routes ---
         if _RE_CREATE_BROWSER_ROUTER.search(content):
-            _extract_object_routes(content, route_file, import_map, file_set, routes, seen_paths, warnings)
+            _extract_object_routes(content, route_file, import_map, file_set, routes, seen_paths, warnings, entry_dir)
 
         # --- JSX <Route> elements ---
-        for m in _RE_JSX_ROUTE.finditer(content):
-            _add_route(m.group("path"), m.group("comp"), route_file, import_map, file_set, routes, seen_paths, warnings)
-        for m in _RE_JSX_ROUTE_ALT.finditer(content):
-            _add_route(m.group("path"), m.group("comp"), route_file, import_map, file_set, routes, seen_paths, warnings)
+        _extract_jsx_routes(content, route_file, import_map, file_set, routes, seen_paths, warnings, entry_dir)
 
     return routes, warnings
 
@@ -348,6 +442,7 @@ def _extract_object_routes(
     routes: list[dict[str, str]],
     seen_paths: set[str],
     warnings: list[str],
+    entry_dir: str = "src",
 ) -> None:
     """Extract routes from createBrowserRouter object notation."""
     for path_m in _RE_ROUTE_OBJECT_PATH.finditer(content):
@@ -380,11 +475,58 @@ def _extract_object_routes(
                 import_map[comp_name] = lazy_path
 
         if comp_name:
-            _add_route(route_path, comp_name, route_file, import_map, file_set, routes, seen_paths, warnings)
+            _add_route(route_path, comp_name, route_file, import_map, file_set, routes, seen_paths, warnings, entry_dir)
         else:
             # Index routes or layout routes without explicit element
             if route_path != "/":
                 warnings.append(f"Route '{route_path}' found but no component could be resolved.")
+
+
+def _extract_jsx_routes(
+    content: str,
+    route_file: str,
+    import_map: dict[str, str],
+    file_set: set[str],
+    routes: list[dict[str, str]],
+    seen_paths: set[str],
+    warnings: list[str],
+    entry_dir: str = "src",
+) -> None:
+    """Extract routes from JSX <Route> elements, handling wrapper components."""
+    for m in _RE_ROUTE_TAG_START.finditer(content):
+        parsed = _parse_jsx_route_tag(content, m.start())
+        if parsed is None:
+            continue
+
+        route_path = parsed["path"]
+        is_index = parsed["is_index"]
+        element_expr = parsed["element_expr"]
+
+        if route_path is None and is_index:
+            route_path = "/"  # index route maps to parent path
+        elif route_path is None:
+            continue  # Layout wrapper route (e.g. root Route with Outlet)
+
+        # Skip catch-all wildcard routes
+        if route_path == "*":
+            continue
+
+        if not element_expr:
+            warnings.append(f"Route '{route_path}': no element expression found.")
+            continue
+
+        # Skip layout routes that contain <Outlet /> (they wrap child routes)
+        all_components = [m.group("comp") for m in _RE_JSX_COMPONENT.finditer(element_expr)]
+        if any(c in _LAYOUT_INDICATORS for c in all_components):
+            continue
+
+        # Extract actual page component from element expression
+        comp_name = _extract_page_component(element_expr)
+        if not comp_name:
+            warnings.append(f"Route '{route_path}': could not find page component in element expression.")
+            continue
+
+        _add_route(route_path, comp_name, route_file, import_map, file_set, routes, seen_paths, warnings, entry_dir)
 
 
 def _add_route(
@@ -396,6 +538,7 @@ def _add_route(
     routes: list[dict[str, str]],
     seen_paths: set[str],
     warnings: list[str],
+    entry_dir: str = "src",
 ) -> None:
     """Add a single route entry, resolving the component file path."""
     if route_path in seen_paths:
@@ -411,7 +554,7 @@ def _add_route(
         if source.startswith("."):
             base = os.path.normpath(os.path.join(dir_of_route, source)).replace("\\", "/")
         elif source.startswith("@/"):
-            base = os.path.join("src", source[2:]).replace("\\", "/")
+            base = os.path.join(entry_dir, source[2:]).replace("\\", "/")
         else:
             base = source
 
@@ -443,6 +586,7 @@ async def analyze_component(
     file_listing: list[str],
     depth: int = 0,
     max_depth: int = 3,
+    entry_dir: str = "src",
 ) -> ComponentFeature:
     """Analyze a single React component file and extract features."""
     warnings: list[str] = []
@@ -484,7 +628,7 @@ async def analyze_component(
     if depth < max_depth:
         for imp in local_imports:
             for name in imp["names"]:
-                resolved = await resolve_import_path(file_path, imp["source"], file_listing)
+                resolved = await resolve_import_path(file_path, imp["source"], file_listing, entry_dir)
                 if not resolved:
                     continue
                 try:
@@ -494,7 +638,7 @@ async def analyze_component(
                     continue
                 child = await analyze_component(
                     child_content, resolved, read_fn, file_listing,
-                    depth=depth + 1, max_depth=max_depth,
+                    depth=depth + 1, max_depth=max_depth, entry_dir=entry_dir,
                 )
                 children.append(child)
 
@@ -754,7 +898,7 @@ async def build_feature_map(
 
         page_comp = await analyze_component(
             page_content, page_file, read_fn, file_listing,
-            depth=0, max_depth=max_depth,
+            depth=0, max_depth=max_depth, entry_dir=entry_dir,
         )
 
         # Separate page-level API endpoints from child-level

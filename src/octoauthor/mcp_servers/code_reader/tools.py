@@ -402,27 +402,33 @@ async def build_feature_map_github(
         return result["content"]
 
     async def search_fn(pattern: str, path: str = ".", glob: str = "*") -> list[dict[str, Any]]:
-        result = await search_code_github(config, github_token, pattern, glob)
+        result = await search_code_github(config, github_token, pattern, glob, path)
         return result.get("matches", [])
 
     async def list_fn(path: str = ".", pattern: str = "*") -> list[str]:
-        # Use the tree API to get a full recursive listing, then filter
-        tree_result = await get_tree_github(config, github_token, path, depth=10)
+        # Use the tree API to get a full recursive listing, then filter.
+        # Normalize path: treat "" and "." as repo root.
+        tree_path = path if path and path != "." else "."
+        tree_result = await get_tree_github(config, github_token, tree_path, depth=10)
         if "error" in tree_result:
             return []
         all_paths: list[str] = []
+
+        # Prefix to prepend so returned paths are relative to repo root
+        base_prefix = path.rstrip("/") + "/" if path and path != "." else ""
 
         def _collect(nodes: list[dict[str, Any]], prefix: str = "") -> None:
             for node in nodes:
                 node_path = f"{prefix}{node['name']}" if prefix else node["name"]
                 if node.get("type") == "file":
+                    full_path = base_prefix + node_path
                     if pattern == "*" or fnmatch.fnmatch(node["name"], pattern):
-                        all_paths.append(node_path)
+                        all_paths.append(full_path)
                     elif "{" in pattern:
                         base, _, rest = pattern.partition("{")
                         exts = rest.rstrip("}").split(",")
                         if any(fnmatch.fnmatch(node["name"], base + e) for e in exts):
-                            all_paths.append(node_path)
+                            all_paths.append(full_path)
                 if node.get("children"):
                     _collect(node["children"], node_path + "/")
 
@@ -434,16 +440,28 @@ async def build_feature_map_github(
 
 
 async def search_code_github(
-    config: CodeReaderConfig, github_token: str, query: str, file_pattern: str = "*"
+    config: CodeReaderConfig, github_token: str, query: str,
+    file_pattern: str = "*", path: str = ".",
 ) -> dict[str, Any]:
     """Search code via GitHub Search API."""
     repo = config.code_source_path
     q = f"{query} repo:{repo}"
     if file_pattern != "*":
-        # Convert glob to GitHub extension filter
-        ext = file_pattern.lstrip("*.")
-        if ext:
-            q += f" extension:{ext}"
+        # Handle brace expansion like "*.{tsx,ts,jsx,js}"
+        if "{" in file_pattern:
+            base, _, rest = file_pattern.partition("{")
+            exts = rest.rstrip("}").split(",")
+            for ext in exts:
+                ext = ext.strip().lstrip(".")
+                if ext:
+                    q += f" extension:{ext}"
+        else:
+            ext = file_pattern.lstrip("*.")
+            if ext:
+                q += f" extension:{ext}"
+    # Scope to directory if not repo root
+    if path and path != ".":
+        q += f" path:{path}"
 
     async with httpx.AsyncClient(follow_redirects=True) as client:
         resp = await client.get(
